@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
 import { randomBytes, createHash, timingSafeEqual } from "crypto";
@@ -14,6 +14,11 @@ export class AuthService {
   ) {}
 
   async register(body: RegisterDto) {
+    // Validate email domain - must be @pymail.cm for new registrations
+    if (!this.isValidPymailEmail(body.email)) {
+      throw new BadRequestException('Email must use @pymail.cm domain');
+    }
+
     const existing = await this.prisma.user.findUnique({ where: { email: body.email } });
     if (existing) throw new ConflictException("email_exists");
     const passwordHash = await bcrypt.hash(body.password, 10);
@@ -31,8 +36,18 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) throw new UnauthorizedException();
+    // For login attempts with non-pymail.cm domains, only allow if user already exists
+    // (to not break existing accounts). Reject if user doesn't exist.
+    let user: any;
+    if (!email.endsWith('@pymail.cm')) {
+      user = await this.prisma.user.findUnique({ where: { email } });
+      if (!user) {
+        throw new UnauthorizedException();
+      }
+    } else {
+      user = await this.prisma.user.findUnique({ where: { email } });
+      if (!user) throw new UnauthorizedException();
+    }
 
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException();
@@ -150,6 +165,11 @@ export class AuthService {
     reply.clearCookie("pm_access", opts);
     reply.clearCookie("pm_sid", opts);
     reply.clearCookie("pm_refresh", opts);
+  }
+
+  // Helper method to validate email domain - only @pymail.cm allowed
+  private isValidPymailEmail(email: string): boolean {
+    return email.endsWith('@pymail.cm');
   }
 
   private hashRefreshToken(token: string) {

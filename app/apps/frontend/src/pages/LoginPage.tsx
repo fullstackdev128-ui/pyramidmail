@@ -63,8 +63,8 @@ export function LoginPage() {
 
         <div className="w-full max-w-md space-y-8">
           <div className="space-y-2">
-            <h1 className="text-3xl font-semibold text-[#162A42]">Nice to see you again</h1>
-            <p className="text-slate-500 font-medium">Login</p>
+            <h1 className="text-3xl font-semibold text-[#162A42]">Welcome to Pymail</h1>
+            <p className="text-slate-500 font-medium">Sign in to your account</p>
           </div>
 
           <form onSubmit={onSubmit} className="space-y-6">

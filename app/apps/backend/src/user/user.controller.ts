@@ -43,7 +43,17 @@ export class UserController {
   @Get("plan")
   async getPlan(@CurrentUser() user: CurrentUserType) {
     const profile = await this.userService.getProfile(user.id);
-    return { plan: (profile as any).plan ?? "free" };
+    const storageUsage = await this.userService.getStorageUsage(user.id);
+
+    return {
+      plan: profile.plan ?? "free",
+      role: profile.role ?? "user",
+      storage: {
+        used: storageUsage.used,
+        limit: storageUsage.limit,
+        percentage: storageUsage.percentage
+      }
+    };
   }
 
   @UseGuards(JwtAuthGuard)

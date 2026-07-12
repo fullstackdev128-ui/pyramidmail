@@ -10,7 +10,7 @@ import loginImage from "@/assets/pymail-login.gif";
 export function SignUpPage() {
   const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
+  const [emailLocal, setEmailLocal] = useState(""); // Only the local part before @
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("");
   const [password, setPassword] = useState("");
@@ -20,9 +20,18 @@ export function SignUpPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Full email with domain
+  const email = `${emailLocal}@pymail.cm`;
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // Validate that email local part is not empty
+    if (!emailLocal.trim()) {
+      setError("Please enter your email username");
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError("Les mots de passe ne correspondent pas");
@@ -87,14 +96,19 @@ export function SignUpPage() {
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-[#162A42]">Email address</label>
-              <Input
-                type="email"
-                placeholder="name@pyramid.com"
-                className="bg-[#EDF3F6] border-none h-12 rounded px-4"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="Enter your email username"
+                  className="bg-[#EDF3F6] border-none h-12 rounded px-4 pr-12"
+                  value={emailLocal}
+                  onChange={(e) => setEmailLocal(e.target.value.replace(/[@\s]/g, ''))} // Remove @ and spaces
+                  required
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">
+                  @pymail.cm
+                </span>
+              </div>
             </div>
 
             <div className="space-y-1.5">

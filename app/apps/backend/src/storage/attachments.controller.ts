@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, Res, UseGuards } from "@nestjs/common";
+import { Controller, Get, Post, Query, Res, UseGuards, BadRequestException } from "@nestjs/common";
 import { FastifyReply, FastifyRequest } from "fastify";
 import { randomBytes } from "crypto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -10,7 +10,8 @@ import { MinioService } from "./minio.service";
 export class AttachmentsController {
   constructor(
     private readonly minio: MinioService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly userService: UserService
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -23,13 +24,24 @@ export class AttachmentsController {
     const file = await req.file();
     if (!file) return reply.status(400).send({ error: "missing_file" });
 
+    // Check storage quota before uploading
+    const { used, limit } = await this.userService.getStorageUsage(user.id);
+    const fileBuffer = await file.toBuffer();
+    const fileSize = fileBuffer.length;
+
+    if (used + fileSize > limit) {
+      return reply.status(413).send({
+        error: "insufficient_storage",
+        message: `Storage quota exceeded. Used: ${this.formatBytes(used)}, Limit: ${this.formatBytes(limit)}`
+      });
+    }
+
     const key = `${user.id}/${randomBytes(12).toString("hex")}-${file.filename}`;
-    const buffer = await file.toBuffer();
-    await this.minio.putObject(key, buffer, buffer.length, {
+    await this.minio.putObject(key, fileBuffer, fileBuffer.length, {
       "Content-Type": file.mimetype,
     });
 
-    return { key, name: file.filename, size: buffer.length, contentType: file.mimetype };
+    return { key, name: file.filename, size: fileSize, contentType: file.mimetype };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -69,5 +81,13 @@ export class AttachmentsController {
       const list = e.attachments as Array<{ key?: string }> | null;
       return Array.isArray(list) && list.some((a) => a.key === key);
     });
+  }
+
+  private formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 }

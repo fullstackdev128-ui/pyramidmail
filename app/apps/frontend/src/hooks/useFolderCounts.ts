@@ -17,19 +17,19 @@ export function useFolderCounts() {
         emailService.getThreads({ folder: "SENT" }),
       ]);
 
-      const countUnread = (threads: ThreadSummary[]) => 
+      const countUnread = (threads: ThreadSummary[]) =>
         threads.filter(t => t.unreadCount > 0).length;
 
       return {
         inbox: countUnread(inbox.data),
-        drafts: drafts.data.length,
-        trash: trash.data.length,
-        spam: spam.data.length,
-        starred: starred.data.length,
-        importants: important.data.length,
-        sent: sent.data.length,
+        drafts: countUnread(drafts.data),
+        trash: countUnread(trash.data),
+        spam: countUnread(spam.data),
+        starred: countUnread(starred.data),
+        importants: countUnread(important.data),
+        sent: countUnread(sent.data),
       };
     },
-    refetchInterval: 60000, // Refresh every 60s
+    refetchInterval: 5000, // Refresh every 5s for near real-time updates
   });
 }

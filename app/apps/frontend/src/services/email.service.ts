@@ -52,11 +52,20 @@ export const emailService = {
   send: (data: {
     threadId?: string;
     to: string[];
+    cc?: string[];
+    bcc?: string[];
     subject: string;
     bodyHtml: string;
+    bodyText?: string;
     attachments?: Array<{ key: string; name: string; size: number; contentType: string }>;
   }) => api.post("/emails/send", data),
 
-  saveDraft: (data: { threadId?: string; to?: string[]; subject?: string; bodyHtml?: string }) =>
-    api.post("/emails/draft", data),
+  saveDraft: (data: {
+    threadId?: string;
+    to?: string[];
+    cc?: string[];
+    bcc?: string[];
+    subject?: string;
+    bodyHtml?: string;
+  }) => api.post("/emails/draft", data),
 };

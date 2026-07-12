@@ -76,7 +76,7 @@ export function Sidebar({ isCollapsed, onToggle, isDrawerOpen, onClose }: Sideba
       path: "/importants",
       count: counts?.importants,
     },
-    { icon: Send, label: t("sidebar.sendMails"), path: "/sent" },
+    { icon: Send, label: t("sidebar.sendMails"), path: "/sent", count: counts?.sent },
     { icon: Clock, label: t("sidebar.spam"), path: "/spam", count: counts?.spam },
     { icon: Star, label: t("sidebar.starred"), path: "/starred", count: counts?.starred },
   ];

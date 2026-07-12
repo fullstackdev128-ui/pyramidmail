@@ -1,0 +1,2666 @@
+diff --git a/apps/backend/.env.example b/apps/backend/.env.example
+index c454b908..21c01f85 100644
+--- a/apps/backend/.env.example
++++ b/apps/backend/.env.example
+@@ -12,7 +12,7 @@ SMTP_PORT=1025
+ SMTP_SECURE=false
+ SMTP_USER=""
+ SMTP_PASS=""
+-BASE_URL="http://localhost:3000"
++BASE_URL="http://localhost:3011"
+ FRONTEND_URL="http://localhost:5173"
+ OAUTH2_CLIENT_ID="pyramid-client"
+ OAUTH2_CLIENT_SECRET="pyramid-secret"
+diff --git a/apps/backend/prisma/migrations/20260601083107_update_bdd/migration.sql b/apps/backend/prisma/migrations/20260601083107_update_bdd/migration.sql
+new file mode 100644
+index 00000000..08210d65
+--- /dev/null
++++ b/apps/backend/prisma/migrations/20260601083107_update_bdd/migration.sql
+@@ -0,0 +1,79 @@
++-- DropIndex
++DROP INDEX "Email_messageId_key";
++
++-- AlterTable
++ALTER TABLE "Email" ADD COLUMN     "size" INTEGER NOT NULL DEFAULT 0;
++
++-- AlterTable
++ALTER TABLE "Session" ADD COLUMN     "device" TEXT,
++ADD COLUMN     "ipAddress" TEXT,
++ADD COLUMN     "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
++
++-- AlterTable
++ALTER TABLE "User" ADD COLUMN     "lastLoginAt" TIMESTAMP(3),
++ADD COLUMN     "plan" TEXT NOT NULL DEFAULT 'free',
++ADD COLUMN     "role" TEXT NOT NULL DEFAULT 'user';
++
++-- AlterTable
++ALTER TABLE "UserSettings" ADD COLUMN     "blockedAddresses" JSONB NOT NULL DEFAULT '[]',
++ADD COLUMN     "filters" JSONB NOT NULL DEFAULT '[]',
++ADD COLUMN     "twoFactorEnabled" BOOLEAN NOT NULL DEFAULT false;
++
++-- CreateTable
++CREATE TABLE "ApiKey" (
++    "id" TEXT NOT NULL,
++    "userId" TEXT NOT NULL,
++    "name" TEXT NOT NULL,
++    "key" TEXT NOT NULL,
++    "permissions" TEXT[],
++    "lastUsedAt" TIMESTAMP(3),
++    "expiresAt" TIMESTAMP(3),
++    "isActive" BOOLEAN NOT NULL DEFAULT true,
++    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
++
++    CONSTRAINT "ApiKey_pkey" PRIMARY KEY ("id")
++);
++
++-- CreateTable
++CREATE TABLE "CalendarEvent" (
++    "id" TEXT NOT NULL,
++    "userId" TEXT NOT NULL,
++    "title" TEXT NOT NULL,
++    "description" TEXT,
++    "startDate" TIMESTAMP(3) NOT NULL,
++    "endDate" TIMESTAMP(3) NOT NULL,
++    "allDay" BOOLEAN NOT NULL DEFAULT false,
++    "color" TEXT NOT NULL DEFAULT '#0087CA',
++    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    "updatedAt" TIMESTAMP(3) NOT NULL,
++
++    CONSTRAINT "CalendarEvent_pkey" PRIMARY KEY ("id")
++);
++
++-- CreateTable
++CREATE TABLE "Task" (
++    "id" TEXT NOT NULL,
++    "userId" TEXT NOT NULL,
++    "title" TEXT NOT NULL,
++    "description" TEXT,
++    "status" TEXT NOT NULL DEFAULT 'todo',
++    "priority" TEXT NOT NULL DEFAULT 'medium',
++    "dueDate" TIMESTAMP(3),
++    "completedAt" TIMESTAMP(3),
++    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    "updatedAt" TIMESTAMP(3) NOT NULL,
++
++    CONSTRAINT "Task_pkey" PRIMARY KEY ("id")
++);
++
++-- CreateIndex
++CREATE UNIQUE INDEX "ApiKey_key_key" ON "ApiKey"("key");
++
++-- AddForeignKey
++ALTER TABLE "ApiKey" ADD CONSTRAINT "ApiKey_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
++
++-- AddForeignKey
++ALTER TABLE "CalendarEvent" ADD CONSTRAINT "CalendarEvent_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
++
++-- AddForeignKey
++ALTER TABLE "Task" ADD CONSTRAINT "Task_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+diff --git a/apps/backend/src/main.ts b/apps/backend/src/main.ts
+index 400ca38c..8e4e69d5 100644
+--- a/apps/backend/src/main.ts
++++ b/apps/backend/src/main.ts
+@@ -18,7 +18,7 @@ async function bootstrap() {
+   app.enableCors({ origin: process.env.FRONTEND_URL, credentials: true });
+   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+ 
+-  await app.listen(3000, "0.0.0.0");
++  await app.listen(3011, "0.0.0.0");
+ }
+ 
+ bootstrap();
+diff --git a/apps/frontend/index.html b/apps/frontend/index.html
+index 732f5289..cef7c6e4 100644
+--- a/apps/frontend/index.html
++++ b/apps/frontend/index.html
+@@ -4,6 +4,9 @@
+     <meta charset="UTF-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+     <title>Pyramid Mail</title>
++    <link rel="preconnect" href="https://fonts.googleapis.com">
++    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
++    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+   </head>
+   <body>
+     <div id="root"></div>
+diff --git a/apps/frontend/package.json b/apps/frontend/package.json
+index 27ca79c7..42fe639d 100644
+--- a/apps/frontend/package.json
++++ b/apps/frontend/package.json
+@@ -24,11 +24,11 @@
+     "axios": "^1.6.0",
+     "class-variance-authority": "^0.7.0",
+     "clsx": "^2.1.0",
+-    "i18next": "^26.0.8",
++    "i18next": "^26.2.0",
+     "lucide-react": "^0.380.0",
+     "react": "^18.2.0",
+     "react-dom": "^18.2.0",
+-    "react-i18next": "^17.0.6",
++    "react-i18next": "^17.0.8",
+     "react-router-dom": "^6.20.0",
+     "recharts": "^3.8.1",
+     "socket.io-client": "^4.5.0",
+diff --git a/apps/frontend/script.py b/apps/frontend/script.py
+new file mode 100644
+index 00000000..2f2de988
+--- /dev/null
++++ b/apps/frontend/script.py
+@@ -0,0 +1,51 @@
++﻿import os, re
++
++directory = 'c:/Users/Jean Marc bassahak/Documents/trae_projects/pyramidmail/apps/frontend/src'
++count = 0
++
++def repl_inner(m):
++    return m.group(0).replace('rounded-xl', 'rounded')
++
++tag_pattern = re.compile(r'<(Select|Textarea)\b[^>]*>', re.DOTALL)
++
++for root, _, files in os.walk(directory):
++    for file in files:
++        if file.endswith('.tsx') or file.endswith('.ts'):
++            path = os.path.join(root, file)
++            with open(path, 'r', encoding='utf-8') as f:
++                content = f.read()
++            
++            new_content = content
++            
++            # Replace raw tags with component tags
++            new_content = re.sub(r'<select\b', '<Select', new_content)
++            new_content = new_content.replace('</select>', '</Select>')
++            
++            new_content = re.sub(r'<textarea\b', '<Textarea', new_content)
++            new_content = new_content.replace('</textarea>', '</Textarea>')
++            
++            # Add imports if needed
++            if '<Select' in new_content and 'ui/select' not in new_content:
++                if 'import ' in new_content:
++                    last_import = [m for m in re.finditer(r'^import .*$', new_content, re.MULTILINE)][-1]
++                    new_content = new_content[:last_import.end()] + '\nimport { Select } from "@/components/ui/select";' + new_content[last_import.end():]
++                else:
++                    new_content = 'import { Select } from "@/components/ui/select";\n' + new_content
++                    
++            if '<Textarea' in new_content and 'ui/textarea' not in new_content:
++                if 'import ' in new_content:
++                    last_import = [m for m in re.finditer(r'^import .*$', new_content, re.MULTILINE)][-1]
++                    new_content = new_content[:last_import.end()] + '\nimport { Textarea } from "@/components/ui/textarea";' + new_content[last_import.end():]
++                else:
++                    new_content = 'import { Textarea } from "@/components/ui/textarea";\n' + new_content
++
++            # Replace rounded-xl with rounded in these components
++            new_content = tag_pattern.sub(repl_inner, new_content)
++            
++            if new_content != content:
++                with open(path, 'w', encoding='utf-8') as f:
++                    f.write(new_content)
++                count += 1
++                print('Updated ' + file)
++
++print('Total files updated: ' + str(count))
+diff --git a/apps/frontend/src/assets/calendar.png b/apps/frontend/src/assets/calendar.png
+new file mode 100644
+index 00000000..031b6984
+Binary files /dev/null and b/apps/frontend/src/assets/calendar.png differ
+diff --git a/apps/frontend/src/assets/envoi.png b/apps/frontend/src/assets/envoi.png
+new file mode 100644
+index 00000000..20a7d26a
+Binary files /dev/null and b/apps/frontend/src/assets/envoi.png differ
+diff --git a/apps/frontend/src/assets/favori.png b/apps/frontend/src/assets/favori.png
+new file mode 100644
+index 00000000..596fb7c7
+Binary files /dev/null and b/apps/frontend/src/assets/favori.png differ
+diff --git a/apps/frontend/src/assets/inbox.png b/apps/frontend/src/assets/inbox.png
+new file mode 100644
+index 00000000..3152ad21
+Binary files /dev/null and b/apps/frontend/src/assets/inbox.png differ
+diff --git a/apps/frontend/src/assets/pymail-login.gif b/apps/frontend/src/assets/pymail-login.gif
+new file mode 100644
+index 00000000..73435109
+Binary files /dev/null and b/apps/frontend/src/assets/pymail-login.gif differ
+diff --git a/apps/frontend/src/assets/spam.png b/apps/frontend/src/assets/spam.png
+new file mode 100644
+index 00000000..b202bc24
+Binary files /dev/null and b/apps/frontend/src/assets/spam.png differ
+diff --git a/apps/frontend/src/assets/trash.png b/apps/frontend/src/assets/trash.png
+new file mode 100644
+index 00000000..3c3595a2
+Binary files /dev/null and b/apps/frontend/src/assets/trash.png differ
+diff --git a/apps/frontend/src/components/ads/LoginAd.tsx b/apps/frontend/src/components/ads/LoginAd.tsx
+index a4c27160..b97754eb 100644
+--- a/apps/frontend/src/components/ads/LoginAd.tsx
++++ b/apps/frontend/src/components/ads/LoginAd.tsx
+@@ -83,7 +83,7 @@ export function LoginAd({ onDismiss }: LoginAdProps) {
+         {/* Content */}
+         <div className="p-6 space-y-4 text-center">
+           <div className="space-y-2">
+-            <h2 className="text-xl font-black text-[#162A42]">Découvrez nos offres Premium</h2>
++            <h2 className="text-xl font-bold text-[#162A42]">Découvrez nos offres Premium</h2>
+             <p className="text-sm text-slate-500 font-medium">
+               Supprimez les publicités et profitez de fonctionnalités avancées
+             </p>
+@@ -91,7 +91,7 @@ export function LoginAd({ onDismiss }: LoginAdProps) {
+ 
+           <Button
+             onClick={handleUpgrade}
+-            className="w-full bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl h-11 font-bold"
++            className="w-full bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded h-11 font-bold"
+           >
+             Voir les offres
+           </Button>
+diff --git a/apps/frontend/src/components/billing/PaymentModal.tsx b/apps/frontend/src/components/billing/PaymentModal.tsx
+index 351073fa..e5f422ba 100644
+--- a/apps/frontend/src/components/billing/PaymentModal.tsx
++++ b/apps/frontend/src/components/billing/PaymentModal.tsx
+@@ -92,7 +92,7 @@ export function PaymentModal({ onClose }: PaymentModalProps) {
+         {step === "choice" && (
+           <div className="p-6 space-y-6">
+             <div className="space-y-1">
+-              <h2 className="text-xl font-black text-[#162A42]">Choisir un moyen de paiement</h2>
++              <h2 className="text-xl font-bold text-[#162A42]">Choisir un moyen de paiement</h2>
+               <p className="text-sm text-slate-500">
+                 Sélectionnez votre opérateur de paiement mobile
+               </p>
+@@ -112,7 +112,7 @@ export function PaymentModal({ onClose }: PaymentModalProps) {
+                 >
+                   {/* Simulated logo */}
+                   <div
+-                    className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0"
++                    className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                     style={{ backgroundColor: method.color }}
+                   >
+                     {method.abbr}
+@@ -123,11 +123,7 @@ export function PaymentModal({ onClose }: PaymentModalProps) {
+             </div>
+ 
+             <div className="flex items-center justify-between gap-3 pt-2">
+-              <Button
+-                variant="outline"
+-                onClick={onClose}
+-                className="flex-1 rounded-xl h-11 font-bold"
+-              >
++              <Button variant="outline" onClick={onClose} className="flex-1 rounded h-11 font-bold">
+                 Annuler
+               </Button>
+               <Button
+@@ -157,7 +153,7 @@ export function PaymentModal({ onClose }: PaymentModalProps) {
+                 <ArrowLeft size={14} />
+                 Retour
+               </button>
+-              <h2 className="text-xl font-black text-[#162A42]">
++              <h2 className="text-xl font-bold text-[#162A42]">
+                 Entrez votre numéro {selectedMethod?.shortLabel}
+               </h2>
+               <p className="text-sm text-slate-500">Un code de confirmation vous sera envoyé</p>
+@@ -167,7 +163,7 @@ export function PaymentModal({ onClose }: PaymentModalProps) {
+             {selectedMethod && (
+               <div className="flex items-center gap-2 bg-[#EDF3F6] px-3 py-2 rounded-xl">
+                 <div
+-                  className="w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-black text-white shrink-0"
++                  className="w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-bold text-white shrink-0"
+                   style={{ backgroundColor: selectedMethod.color }}
+                 >
+                   {selectedMethod.abbr}
+@@ -214,7 +210,7 @@ export function PaymentModal({ onClose }: PaymentModalProps) {
+                 onClick={handlePay}
+                 disabled={phone.length < 9}
+                 className={cn(
+-                  "flex-1 rounded-xl h-11 font-bold",
++                  "flex-1 rounded h-11 font-bold",
+                   "bg-[#0087CA] hover:bg-[#0087CA]/90 text-white",
+                   phone.length < 9 && "opacity-50 cursor-not-allowed"
+                 )}
+@@ -243,7 +239,7 @@ export function PaymentModal({ onClose }: PaymentModalProps) {
+           <div className="p-6 space-y-6 text-center">
+             <CheckCircle2 size={64} className="text-[#10B981] mx-auto" />
+             <div className="space-y-2">
+-              <h2 className="text-2xl font-black text-[#162A42]">Paiement réussi !</h2>
++              <h2 className="text-2xl font-bold text-[#162A42]">Paiement réussi !</h2>
+               <p className="text-sm text-slate-500">Votre compte a été upgradé vers Premium</p>
+             </div>
+ 
+@@ -273,7 +269,7 @@ export function PaymentModal({ onClose }: PaymentModalProps) {
+ 
+             <Button
+               onClick={handleConfirm}
+-              className="w-full rounded-xl h-12 font-bold bg-[#0087CA] hover:bg-[#0087CA]/90 text-white text-base"
++              className="w-full rounded h-12 font-bold bg-[#0087CA] hover:bg-[#0087CA]/90 text-white text-base"
+             >
+               Accéder à Premium
+             </Button>
+diff --git a/apps/frontend/src/components/compose/ComposeModal.tsx b/apps/frontend/src/components/compose/ComposeModal.tsx
+index 8735a513..454fde93 100644
+--- a/apps/frontend/src/components/compose/ComposeModal.tsx
++++ b/apps/frontend/src/components/compose/ComposeModal.tsx
+@@ -473,7 +473,7 @@ export function ComposeModal() {
+                 {draft.attachments.map((file, index) => (
+                   <div
+                     key={`${file.name}-${index}`}
+-                    className="flex items-center gap-2 px-3 py-1.5 bg-[#EDF3F6] border border-slate-200 rounded-lg group animate-in fade-in zoom-in duration-200"
++                    className="flex items-center gap-2 px-3 py-1.5 bg-[#EDF3F6] border border-slate-200 rounded-md group animate-in fade-in zoom-in duration-200"
+                   >
+                     <FileIcon size={14} className="text-[#0087CA]" />
+                     <div className="flex flex-col">
+@@ -509,7 +509,7 @@ export function ComposeModal() {
+       >
+         <div className={cn("flex items-center gap-2", isMobile && "w-full flex-wrap")}>
+           <Button
+-            className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl px-6 font-bold h-10 disabled:opacity-50"
++            className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded px-6 font-bold h-10 disabled:opacity-50"
+             onClick={handleSend}
+             disabled={sendEmailMutation.isPending}
+           >
+@@ -527,13 +527,13 @@ export function ComposeModal() {
+             <>
+               <Button
+                 variant="outline"
+-                className="rounded-xl px-4 h-10 text-[#162A42] border-[#DFE5E7] hover:bg-[#DFE3E8]"
++                className="rounded px-4 h-10 text-[#162A42] border-[#DFE5E7] hover:bg-[#DFE3E8]"
+                 onClick={handleClose}
+               >
+                 {t("compose.discard")}
+               </Button>
+               <div className="w-[1px] h-10 bg-slate-200" />
+-              <Button className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl px-2 h-10">
++              <Button className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded px-2 h-10">
+                 <ChevronDown size={16} />
+               </Button>
+             </>
+diff --git a/apps/frontend/src/components/developers/ApiKeyGeneratorModal.tsx b/apps/frontend/src/components/developers/ApiKeyGeneratorModal.tsx
+index eee23767..009165b7 100644
+--- a/apps/frontend/src/components/developers/ApiKeyGeneratorModal.tsx
++++ b/apps/frontend/src/components/developers/ApiKeyGeneratorModal.tsx
+@@ -131,7 +131,7 @@ export function ApiKeyGeneratorModal({
+           ) : (
+             /* Generated Key Display */
+             <div className="space-y-6">
+-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
++              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                 <p className="text-sm text-yellow-800">
+                   ⚠️ Copiez cette clé maintenant, elle ne sera plus visible après la fermeture de
+                   cette fenêtre.
+diff --git a/apps/frontend/src/components/developers/CodeSnippetBlock.tsx b/apps/frontend/src/components/developers/CodeSnippetBlock.tsx
+index 6f6531fd..c2580b5c 100644
+--- a/apps/frontend/src/components/developers/CodeSnippetBlock.tsx
++++ b/apps/frontend/src/components/developers/CodeSnippetBlock.tsx
+@@ -60,7 +60,7 @@ export function CodeSnippetBlock({ snippets }: CodeSnippetBlockProps) {
+   };
+ 
+   return (
+-    <div className="bg-[#1e293b] rounded-lg overflow-hidden">
++    <div className="bg-[#1e293b] rounded-md overflow-hidden">
+       {/* Header with tabs and copy button */}
+       <div className="flex items-center justify-between px-4 py-2 bg-[#0f172a] border-b border-slate-700">
+         <div className="flex-1">
+diff --git a/apps/frontend/src/components/email/AttachmentCard.tsx b/apps/frontend/src/components/email/AttachmentCard.tsx
+index a71a5447..f5232863 100644
+--- a/apps/frontend/src/components/email/AttachmentCard.tsx
++++ b/apps/frontend/src/components/email/AttachmentCard.tsx
+@@ -52,7 +52,7 @@ export function AttachmentCard({
+ 
+   return (
+     <div className="flex items-center gap-3 p-3 bg-[#EDF3F6] border border-slate-100 rounded-xl hover:bg-[#DFE5E7] transition-all group max-w-[240px]">
+-      <div className={cn("p-2 rounded-lg bg-white shadow-sm shrink-0", config.color)}>
++      <div className={cn("p-2 rounded-md bg-white shadow-sm shrink-0", config.color)}>
+         <config.icon size={20} />
+       </div>
+       <div className="flex-1 min-w-0">
+diff --git a/apps/frontend/src/components/email/AttachmentPreview.tsx b/apps/frontend/src/components/email/AttachmentPreview.tsx
+index 846a8ccb..8cbdd889 100644
+--- a/apps/frontend/src/components/email/AttachmentPreview.tsx
++++ b/apps/frontend/src/components/email/AttachmentPreview.tsx
+@@ -74,7 +74,7 @@ export function AttachmentPreview({
+           </Wrapper>
+           <Wrapper className="flex items-center gap-4">
+             <Button
+-              className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl gap-2 font-bold"
++              className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded gap-2 font-bold"
+               onClick={handleDownload}
+               disabled={isLoading || error}
+             >
+@@ -98,21 +98,21 @@ export function AttachmentPreview({
+             <img
+               src={previewUrl}
+               alt={attachment.name}
+-              className="max-h-full max-w-full object-contain rounded-lg shadow-2xl"
++              className="max-h-full max-w-full object-contain rounded-md shadow-2xl"
+             />
+           ) : attachment.type === "pdf" && previewUrl ? (
+             <iframe
+               src={previewUrl}
+               title={attachment.name}
+-              className="w-full max-w-4xl h-[80vh] bg-white rounded-lg"
++              className="w-full max-w-4xl h-[80vh] bg-white rounded-md"
+             />
+           ) : (
+-            <Wrapper className="max-w-4xl w-full aspect-video bg-white/5 rounded-3xl border border-white/10 flex flex-col items-center justify-center text-white/60 space-y-6">
++            <Wrapper className="max-w-4xl w-full aspect-video bg-white/5 rounded-xl border border-white/10 flex flex-col items-center justify-center text-white/60 space-y-6">
+               <Wrapper className="w-32 h-32 bg-slate-500/20 rounded-full flex items-center justify-center text-slate-400">
+                 {attachment.type === "image" ? <ImageIcon size={64} /> : <FileText size={64} />}
+               </Wrapper>
+               <p className="font-medium">Aperçu non disponible pour ce type de fichier</p>
+-              <Button onClick={handleDownload} className="bg-[#0087CA] text-white rounded-xl">
++              <Button onClick={handleDownload} className="bg-[#0087CA] text-white rounded">
+                 Télécharger le fichier
+               </Button>
+             </Wrapper>
+diff --git a/apps/frontend/src/components/email/EmailListPanel.tsx b/apps/frontend/src/components/email/EmailListPanel.tsx
+index 332d09ab..313b0b4a 100644
+--- a/apps/frontend/src/components/email/EmailListPanel.tsx
++++ b/apps/frontend/src/components/email/EmailListPanel.tsx
+@@ -57,7 +57,7 @@ export function EmailListPanel({
+ }: EmailListPanelProps) {
+   return (
+     <div className="w-full border-r border-slate-100 flex flex-col bg-white">
+-      <div className="p-3 lg:p-4 border-b border-slate-100 flex items-center justify-between">
++      <div className="p-2 lg:p-3 border-b border-slate-100 flex items-center justify-between">
+         <div className="flex items-center gap-2">
+           <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={refetch}>
+             <span className={cn("text-slate-500", isFetching && "animate-spin")}>⟳</span>
+diff --git a/apps/frontend/src/components/email/EmailReadPanel.tsx b/apps/frontend/src/components/email/EmailReadPanel.tsx
+index fa80b0df..1b81b540 100644
+--- a/apps/frontend/src/components/email/EmailReadPanel.tsx
++++ b/apps/frontend/src/components/email/EmailReadPanel.tsx
+@@ -185,7 +185,7 @@ export function EmailReadPanel({
+             <div className="pt-6 border-t border-slate-100">
+               <Button
+                 variant="outline"
+-                className="rounded-xl px-6 gap-2 border-[#DFE5E7] hover:bg-[#EDF3F6] text-[#162A42] font-bold"
++                className="rounded px-6 gap-2 border-[#DFE5E7] hover:bg-[#EDF3F6] text-[#162A42] font-bold"
+                 onClick={() => onReply(selectedEmail)}
+               >
+                 <Reply size={18} />
+diff --git a/apps/frontend/src/components/email/InboxTabs.tsx b/apps/frontend/src/components/email/InboxTabs.tsx
+index 5258e810..2cd7ae60 100644
+--- a/apps/frontend/src/components/email/InboxTabs.tsx
++++ b/apps/frontend/src/components/email/InboxTabs.tsx
+@@ -22,7 +22,7 @@ export function InboxTabs({ activeCategory, onCategoryChange, counts }: InboxTab
+   const { t } = useTranslation();
+ 
+   return (
+-    <div className="flex items-center gap-2 border-b border-[#DFE5E7] bg-transparent px-4 py-3 overflow-x-auto no-scrollbar">
++    <div className="flex items-center border-b border-[#DFE5E7] bg-transparent overflow-x-auto no-scrollbar">
+       {tabs.map(({ category, icon: Icon, translationKey }) => {
+         const isActive = category === activeCategory;
+         return (
+@@ -31,7 +31,7 @@ export function InboxTabs({ activeCategory, onCategoryChange, counts }: InboxTab
+             type="button"
+             onClick={() => onCategoryChange(category)}
+             className={cn(
+-              "flex items-center gap-2 rounded-t-xl px-4 py-2 text-sm font-semibold transition-colors duration-200",
++              "flex flex-1 items-center justify-center gap-2 rounded-t px-4 py-2 text-sm font-semibold transition-colors duration-200",
+               isActive
+                 ? "text-[#0087CA] border-b-2 border-[#0087CA] bg-[#EDF3F6]"
+                 : "text-[#091D35] hover:bg-[#EDF3F6]"
+diff --git a/apps/frontend/src/components/layout/Header.tsx b/apps/frontend/src/components/layout/Header.tsx
+index c962ff80..d54969c9 100644
+--- a/apps/frontend/src/components/layout/Header.tsx
++++ b/apps/frontend/src/components/layout/Header.tsx
+@@ -157,7 +157,7 @@ export function Header() {
+         <button
+           type="button"
+           onClick={openDrawer}
+-          className="inline-flex items-center justify-center w-9 h-9 rounded-xl text-slate-600 hover:bg-slate-100 transition-colors lg:hidden"
++          className="inline-flex items-center justify-center w-9 h-9 rounded text-slate-600 hover:bg-slate-100 transition-colors lg:hidden"
+           aria-label="Ouvrir le menu"
+         >
+           <Menu size={18} />
+@@ -189,10 +189,10 @@ export function Header() {
+             className="w-[400px] max-w-[90vw] p-6 top-12"
+           >
+             <div className="space-y-4">
+-              <h3 className="font-bold text-[#162A42] mb-4">Recherche avancée</h3>
++              <h3 className="font-semibold text-[#162A42] mb-4">Recherche avancée</h3>
+               <div className="space-y-3">
+                 <div className="space-y-1">
+-                  <label className="text-[10px] font-bold text-slate-400 uppercase">De</label>
++                  <label className="text-[10px] font-semibold text-slate-400 uppercase">De</label>
+                   <Input
+                     className="h-9 bg-[#EDF3F6] border-none"
+                     placeholder="Expéditeur"
+@@ -201,7 +201,9 @@ export function Header() {
+                   />
+                 </div>
+                 <div className="space-y-1">
+-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Objet</label>
++                  <label className="text-[10px] font-semibold text-slate-400 uppercase">
++                    Objet
++                  </label>
+                   <Input
+                     className="h-9 bg-[#EDF3F6] border-none"
+                     placeholder="Sujet de l'email"
+@@ -211,7 +213,7 @@ export function Header() {
+                 </div>
+                 <div className="grid grid-cols-2 gap-3">
+                   <div className="space-y-1">
+-                    <label className="text-[10px] font-bold text-slate-400 uppercase">
++                    <label className="text-[10px] font-semibold text-slate-400 uppercase">
+                       Dossier
+                     </label>
+                     <Select
+@@ -221,7 +223,7 @@ export function Header() {
+                     />
+                   </div>
+                   <div className="space-y-1">
+-                    <label className="text-[10px] font-bold text-slate-400 uppercase">
++                    <label className="text-[10px] font-semibold text-slate-400 uppercase">
+                       Pièces jointes
+                     </label>
+                     <Select
+@@ -235,7 +237,7 @@ export function Header() {
+               <Button
+                 type="button"
+                 onClick={handleSearch}
+-                className="w-full bg-[#0087CA] hover:bg-[#0087CA]/90 text-white h-10 rounded-xl font-bold mt-4"
++                className="w-full bg-[#0087CA] hover:bg-[#0087CA]/90 text-white h-10 rounded font-semibold mt-4"
+               >
+                 Rechercher
+               </Button>
+@@ -273,18 +275,18 @@ export function Header() {
+       <div className="flex items-center gap-3 pl-4" ref={dropdownRef}>
+         <DropdownMenu>
+           <DropdownMenuTrigger onClick={() => setShowAccountMenu(!showAccountMenu)}>
+-            <div className="flex items-center gap-3 p-1.5 rounded-full hover:bg-slate-50 transition-colors">
+-              <span className="text-xs text-[#091D35] font-bold hidden md:block">
++            <div className="flex items-center gap-3 rounded-full hover:bg-slate-50 transition-colors">
++              {/* <span className="text-xs text-[#091D35] font-semibold hidden md:block">
+                 {user?.displayName || user?.email?.split("@")[0] || "User"}
+-              </span>
++              </span> */}
+               <Avatar
+                 className={cn(
+-                  "h-8 w-8 border-2 border-white shadow-sm shrink-0",
++                  "h-10 w-10 border-2 border-white shadow-sm shrink-0",
+                   getUserColor(displayLabel)
+                 )}
+               >
+                 {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayLabel} /> : null}
+-                <AvatarFallback className="bg-transparent text-[10px] font-bold">
++                <AvatarFallback className="bg-transparent text-[10px] font-semibold">
+                   {getUserInitials(displayLabel)}
+                 </AvatarFallback>
+               </Avatar>
+@@ -292,33 +294,33 @@ export function Header() {
+           </DropdownMenuTrigger>
+ 
+           {showAccountMenu && (
+-            <DropdownMenuContent className="w-[280px] p-2 mt-2 bg-white rounded-2xl border border-slate-100 shadow-md block">
++            <DropdownMenuContent className="w-[280px] p-3 mt-2 bg-white rounded-2xl border border-slate-100 shadow-md block">
+               {/* Header section */}
+-              <div className="p-4 flex items-center gap-3">
++              <div className="flex items-center gap-3">
+                 <Avatar className={cn("h-12 w-12 shrink-0", getUserColor(displayLabel))}>
+                   {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayLabel} /> : null}
+-                  <AvatarFallback className="bg-transparent text-lg font-bold">
++                  <AvatarFallback className="bg-transparent text-lg font-semibold">
+                     {getUserInitials(displayLabel)}
+                   </AvatarFallback>
+                 </Avatar>
+                 <div className="flex-1 min-w-0">
+                   <div className="flex items-center gap-2">
+-                    <h4 className="text-sm font-black text-[#162A42] truncate">
++                    <h4 className="text-sm font-bold text-[#162A42] truncate">
+                       {user?.displayName || user?.email?.split("@")[0]}
+                     </h4>
+                     <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                   </div>
+                   <p className="text-[10px] text-slate-400 font-medium truncate">{user?.email}</p>
+                   <div className="mt-1 flex items-center gap-1.5">
+-                    <span className="bg-green-100 text-green-600 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
++                    <span className="bg-green-100 text-green-600 text-[9px] font-semibold  tracking-widest px-2 py-0.5 rounded-full">
+                       Compte actif
+                     </span>
+                     {plan === "premium" ? (
+-                      <span className="bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
++                      <span className="bg-amber-500 text-white text-[9px] font-semibold tracking-widest px-2 py-0.5 rounded-full">
+                         Premium ✨
+                       </span>
+                     ) : (
+-                      <span className="bg-[#DFE5E7] text-[#091D35] text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
++                      <span className="bg-[#DFE5E7] text-[#091D35] text-[9px] font-semibold tracking-widest px-2 py-0.5 rounded-full">
+                         Gratuit
+                       </span>
+                     )}
+@@ -335,7 +337,7 @@ export function Header() {
+                     setShowAccountMenu(false);
+                     navigate("/profile");
+                   }}
+-                  className="rounded-xl gap-3 h-10 font-bold group"
++                  className="rounded-xl gap-3 h-10 font-semibold group"
+                 >
+                   <User size={16} className="text-slate-400 group-hover:text-[#0087CA]" />
+                   {t("auth.profile")}
+@@ -345,7 +347,7 @@ export function Header() {
+                     setShowAccountMenu(false);
+                     navigate("/settings");
+                   }}
+-                  className="rounded-xl gap-3 h-10 font-bold group"
++                  className="rounded-xl gap-3 h-10 font-semibold group"
+                 >
+                   <Settings size={16} className="text-slate-400 group-hover:text-[#0087CA]" />
+                   {t("auth.settings")}
+@@ -358,7 +360,7 @@ export function Header() {
+                     setShowAccountMenu(false);
+                     setShowComingSoon(true);
+                   }}
+-                  className="rounded-xl gap-3 h-10 font-bold group"
++                  className="rounded-xl gap-3 h-10 font-semibold group"
+                 >
+                   <UserPlus size={16} className="text-slate-400 group-hover:text-[#0087CA]" />
+                   {t("auth.addAccount")}
+@@ -367,7 +369,7 @@ export function Header() {
+                 <Separator className="my-1 bg-slate-100" />
+ 
+                 <div className="px-3 py-2">
+-                  <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
++                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                     <Globe size={14} />
+                     {t("auth.language")}
+                   </div>
+@@ -394,7 +396,7 @@ export function Header() {
+ 
+                 <DropdownMenuItem
+                   onClick={handleLogout}
+-                  className="group font-bold text-red-500 hover:bg-red-50 hover:text-red-600 rounded-xl"
++                  className="group font-semibold text-red-500 hover:bg-red-50 hover:text-red-600 rounded-xl"
+                 >
+                   <LogOut
+                     size={16}
+@@ -415,17 +417,17 @@ export function Header() {
+             className="absolute inset-0 bg-[#162A42]/60 backdrop-blur-sm"
+             onClick={() => setShowComingSoon(false)}
+           />
+-          <div className="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl relative z-10 space-y-4 text-center animate-in zoom-in-95 duration-200">
++          <div className="bg-white w-full max-w-xs rounded-xl p-6 shadow-2xl relative z-10 space-y-4 text-center animate-in zoom-in-95 duration-200">
+             <div className="w-12 h-12 bg-[#EDF3F6] rounded-2xl flex items-center justify-center text-[#0087CA] mx-auto">
+               <UserPlus size={24} />
+             </div>
+             <div className="space-y-1">
+-              <h3 className="text-lg font-black text-[#162A42]">{t("common.inDevelopment")}</h3>
++              <h3 className="text-lg font-bold text-[#162A42]">{t("common.inDevelopment")}</h3>
+               <p className="text-sm text-slate-500 font-medium">{t("common.comingSoon")}</p>
+             </div>
+             <Button
+               onClick={() => setShowComingSoon(false)}
+-              className="w-full bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl h-10 font-bold"
++              className="w-full bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl h-10 font-semibold"
+             >
+               {t("common.close")}
+             </Button>
+diff --git a/apps/frontend/src/components/layout/Sidebar.tsx b/apps/frontend/src/components/layout/Sidebar.tsx
+index b1232124..5560a3ef 100644
+--- a/apps/frontend/src/components/layout/Sidebar.tsx
++++ b/apps/frontend/src/components/layout/Sidebar.tsx
+@@ -26,6 +26,7 @@ import { useFolderCounts } from "@/hooks/useFolderCounts";
+ import { useComposeStore } from "@/store/useComposeStore";
+ import { useIsDesktop } from "@/hooks/useBreakpoint";
+ import { Separator } from "@/components/ui/separator";
++import { Tooltip } from "@/components/ui/tooltip";
+ 
+ interface SidebarProps {
+   isCollapsed: boolean;
+@@ -98,14 +99,14 @@ export function Sidebar({ isCollapsed, onToggle, isDrawerOpen, onClose }: Sideba
+ 
+   const renderNavItem = ({ icon: Icon, label, path, count }: NavItem) => {
+     const isActive = location.pathname === path;
+-    return (
++    const link = (
+       <Link
+         key={path}
+         to={path}
+         onClick={() => onClose?.()}
+         className={cn(
+           "flex items-center rounded-xl text-sm transition-all duration-200 group relative",
+-          showLabels ? "justify-between px-3 py-2" : "justify-center px-2 py-2",
++          showLabels ? "justify-between px-3 py-2" : "justify-center p-0 w-9 h-9 mx-auto",
+           isActive
+             ? "bg-[#DFE5E7] text-[#0087CA] font-semibold"
+             : "text-[#091D35] hover:bg-[#DFE5E7]/50 hover:text-[#0087CA]"
+@@ -131,13 +132,16 @@ export function Sidebar({ isCollapsed, onToggle, isDrawerOpen, onClose }: Sideba
+             {count}
+           </span>
+         )}
+-        {!showLabels && (
+-          <div className="absolute left-full ml-2 px-2 py-1 bg-[#162A42] text-white text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50 pointer-events-none">
+-            {label}
+-          </div>
+-        )}
+       </Link>
+     );
++
++    return showLabels ? (
++      link
++    ) : (
++      <div key={path} className="flex justify-center w-full">
++        <Tooltip content={label}>{link}</Tooltip>
++      </div>
++    );
+   };
+ 
+   return (
+@@ -153,9 +157,9 @@ export function Sidebar({ isCollapsed, onToggle, isDrawerOpen, onClose }: Sideba
+       )}
+       <aside
+         className={cn(
+-          "fixed left-0 top-16 bottom-0 bg-white border-r border-slate-100 flex flex-col p-4 z-[95] overflow-y-auto custom-scrollbar transition-all duration-200",
++          "fixed left-0 top-16 bottom-0 bg-white border-r border-slate-100 flex flex-col p-4 z-[95] overflow-visible transition-all duration-200",
+           isDesktop ? "lg:flex" : "lg:hidden",
+-          isDesktop ? (isCollapsed ? "lg:w-[56px]" : "lg:w-[240px]") : "w-[280px]",
++          isDesktop ? (isCollapsed ? "lg:w-[68px]" : "lg:w-[240px]") : "w-[280px]",
+           !isDesktop && cn("transform", drawerVisible ? "translate-x-0" : "-translate-x-full")
+         )}
+       >
+@@ -164,14 +168,14 @@ export function Sidebar({ isCollapsed, onToggle, isDrawerOpen, onClose }: Sideba
+             <div className="flex items-center justify-end mb-3">
+               <button
+                 onClick={onClose}
+-                className="shrink-0 w-9 h-9 flex items-center justify-center rounded-xl text-[#091D35] hover:bg-[#DFE5E7] transition-colors"
++                className="shrink-0 w-9 h-9 flex items-center justify-center rounded text-[#091D35] hover:bg-[#DFE5E7] transition-colors"
+                 aria-label="Fermer le menu"
+               >
+                 <X size={18} />
+               </button>
+             </div>
+             <Button
+-              className="w-full h-11 bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl gap-2 shadow-sm font-semibold mb-6"
++              className="w-full h-11 bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded gap-2 shadow-sm font-semibold mb-6"
+               onClick={() => {
+                 open();
+                 onClose?.();
+@@ -198,7 +202,7 @@ export function Sidebar({ isCollapsed, onToggle, isDrawerOpen, onClose }: Sideba
+             {isDesktop && (
+               <Button
+                 className={cn(
+-                  "bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl gap-2 shadow-sm font-semibold shrink-0 transition-all duration-200",
++                  "bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded gap-2 shadow-sm font-semibold shrink-0 transition-all duration-200",
+                   isCollapsed ? "w-9 h-9 p-0 justify-center" : "flex-1 h-11"
+                 )}
+                 onClick={() => {
+@@ -248,17 +252,12 @@ export function Sidebar({ isCollapsed, onToggle, isDrawerOpen, onClose }: Sideba
+                   )}
+                 />
+                 {showLabels && <span>{label}</span>}
+-                {!showLabels && (
+-                  <div className="absolute left-full ml-2 px-2 py-1 bg-[#162A42] text-white text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50 pointer-events-none">
+-                    {label}
+-                  </div>
+-                )}
+               </>
+             );
+ 
+             const baseClass = cn(
+               "flex items-center rounded-xl text-sm transition-all duration-200 group relative",
+-              showLabels ? "gap-3 px-3 py-2" : "justify-center px-2 py-2",
++              showLabels ? "gap-3 px-3 py-2" : "justify-center p-0 w-9 h-9 mx-auto",
+               danger
+                 ? "text-[#091D35] hover:bg-red-50 hover:text-red-600"
+                 : cn(
+@@ -267,15 +266,11 @@ export function Sidebar({ isCollapsed, onToggle, isDrawerOpen, onClose }: Sideba
+                   )
+             );
+ 
+-            if (path) {
+-              return (
+-                <Link key={label} to={path} onClick={() => onClose?.()} className={baseClass}>
+-                  {content}
+-                </Link>
+-              );
+-            }
+-
+-            return (
++            const element = path ? (
++              <Link key={label} to={path} onClick={() => onClose?.()} className={baseClass}>
++                {content}
++              </Link>
++            ) : (
+               <button
+                 key={label}
+                 onClick={() => {
+@@ -287,6 +282,14 @@ export function Sidebar({ isCollapsed, onToggle, isDrawerOpen, onClose }: Sideba
+                 {content}
+               </button>
+             );
++
++            return showLabels ? (
++              element
++            ) : (
++              <div key={label} className="flex justify-center w-full">
++                <Tooltip content={label}>{element}</Tooltip>
++              </div>
++            );
+           })}
+         </div>
+       </aside>
+diff --git a/apps/frontend/src/components/security/ConnectionHistoryTable.tsx b/apps/frontend/src/components/security/ConnectionHistoryTable.tsx
+index ce68f646..2ede5977 100644
+--- a/apps/frontend/src/components/security/ConnectionHistoryTable.tsx
++++ b/apps/frontend/src/components/security/ConnectionHistoryTable.tsx
+@@ -80,7 +80,7 @@ export function ConnectionHistoryTable({ history }: ConnectionHistoryTableProps)
+       </div>
+ 
+       {/* Table */}
+-      <div className="border border-[#DFE5E7] rounded-lg overflow-hidden">
++      <div className="border border-[#DFE5E7] rounded-md overflow-hidden">
+         <div className="overflow-x-auto">
+           <table className="w-full text-sm">
+             <thead>
+diff --git a/apps/frontend/src/components/ui/confirm-dialog.tsx b/apps/frontend/src/components/ui/confirm-dialog.tsx
+index e0933d22..e8d31ace 100644
+--- a/apps/frontend/src/components/ui/confirm-dialog.tsx
++++ b/apps/frontend/src/components/ui/confirm-dialog.tsx
+@@ -35,9 +35,9 @@ export function ConfirmDialog({
+         onClick={onCancel}
+         aria-hidden
+       />
+-      <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl relative z-10 space-y-4 animate-in zoom-in-95 duration-200">
++      <div className="bg-white w-full max-w-sm rounded-xl p-6 shadow-2xl relative z-10 space-y-4 animate-in zoom-in-95 duration-200">
+         <div className="space-y-2">
+-          <h3 className="text-lg font-black text-[#162A42]">{title}</h3>
++          <h3 className="text-lg font-bold text-[#162A42]">{title}</h3>
+           <p className="text-sm text-slate-500 font-medium">{description}</p>
+         </div>
+         <div className="flex gap-3 pt-2">
+@@ -45,7 +45,7 @@ export function ConfirmDialog({
+             type="button"
+             variant="outline"
+             onClick={onCancel}
+-            className="flex-1 rounded-xl h-10 font-bold border-slate-200"
++            className="flex-1 rounded h-10 font-bold border-slate-200"
+           >
+             {cancelLabel}
+           </Button>
+@@ -53,7 +53,7 @@ export function ConfirmDialog({
+             type="button"
+             onClick={onConfirm}
+             className={cn(
+-              "flex-1 rounded-xl h-10 font-bold text-white",
++              "flex-1 rounded h-10 font-bold text-white",
+               variant === "danger"
+                 ? "bg-red-600 hover:bg-red-700"
+                 : "bg-[#0087CA] hover:bg-[#0087CA]/90"
+diff --git a/apps/frontend/src/components/ui/date-picker.tsx b/apps/frontend/src/components/ui/date-picker.tsx
+index 8dac43a8..622d207c 100644
+--- a/apps/frontend/src/components/ui/date-picker.tsx
++++ b/apps/frontend/src/components/ui/date-picker.tsx
+@@ -10,7 +10,7 @@ export function DatePicker({ className, ...props }: DatePickerProps) {
+       <input
+         type="date"
+         className={cn(
+-          "w-full h-10 rounded-xl bg-[#EDF3F6] border-none px-4 pr-10 text-sm font-medium text-[#091D35] focus:ring-1 focus:ring-[#0087CA] outline-none cursor-pointer",
++          "w-full h-10 rounded bg-[#EDF3F6] border-none px-4 pr-10 text-sm font-medium text-[#091D35] focus:ring-1 focus:ring-[#0087CA] outline-none cursor-pointer",
+           className
+         )}
+         {...props}
+diff --git a/apps/frontend/src/components/ui/dropdown-menu.tsx b/apps/frontend/src/components/ui/dropdown-menu.tsx
+index 02774322..7822a047 100644
+--- a/apps/frontend/src/components/ui/dropdown-menu.tsx
++++ b/apps/frontend/src/components/ui/dropdown-menu.tsx
+@@ -46,7 +46,7 @@ const DropdownMenuItem = ({
+   <button
+     onClick={onClick}
+     className={cn(
+-      "flex items-center w-full px-3.5 py-2.5 text-left text-sm text-[#091D35] hover:bg-slate-50 rounded-xl transition-all duration-200 gap-3 font-semibold",
++      "flex items-center w-full px-3.5 py-2.5 text-left text-sm text-[#091D35] hover:bg-slate-50 rounded transition-all duration-200 gap-3 font-semibold",
+       className
+     )}
+   >
+diff --git a/apps/frontend/src/components/ui/error-state.tsx b/apps/frontend/src/components/ui/error-state.tsx
+index 059ed93d..49419a81 100644
+--- a/apps/frontend/src/components/ui/error-state.tsx
++++ b/apps/frontend/src/components/ui/error-state.tsx
+@@ -6,19 +6,16 @@ interface ErrorStateProps {
+   onRetry?: () => void;
+ }
+ 
+-export function ErrorState({ 
+-  message = "Erreur de chargement. Réessayer.", 
+-  onRetry 
++export function ErrorState({
++  message = "Erreur de chargement. Réessayer.",
++  onRetry,
+ }: ErrorStateProps) {
+   return (
+     <div className="flex flex-col items-center justify-center p-8 text-center space-y-4">
+       <AlertCircle className="w-12 h-12 text-red-500" />
+       <p className="text-slate-600 font-medium">{message}</p>
+       {onRetry && (
+-        <Button 
+-          onClick={onRetry}
+-          className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl"
+-        >
++        <Button onClick={onRetry} className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded">
+           Réessayer
+         </Button>
+       )}
+diff --git a/apps/frontend/src/components/ui/otp-input.tsx b/apps/frontend/src/components/ui/otp-input.tsx
+index 5e2eb572..973cae7f 100644
+--- a/apps/frontend/src/components/ui/otp-input.tsx
++++ b/apps/frontend/src/components/ui/otp-input.tsx
+@@ -43,7 +43,7 @@ export function OTPInput({ value, onChange, length = 5 }: OTPInputProps) {
+           onChange={(e) => handleChange(e, i)}
+           onKeyDown={(e) => handleKeyDown(e, i)}
+           className={cn(
+-            "w-12 h-14 text-center text-xl font-bold rounded-lg border border-slate-200 bg-[#EDF3F6] focus:border-[#0087CA] focus:ring-1 focus:ring-[#0087CA] outline-none transition-all",
++            "w-12 h-14 text-center text-xl font-bold rounded-md border border-slate-200 bg-[#EDF3F6] focus:border-[#0087CA] focus:ring-1 focus:ring-[#0087CA] outline-none transition-all",
+             value[i] && "border-[#0087CA] bg-white"
+           )}
+         />
+diff --git a/apps/frontend/src/components/ui/select.tsx b/apps/frontend/src/components/ui/select.tsx
+index c96725f1..7451091a 100644
+--- a/apps/frontend/src/components/ui/select.tsx
++++ b/apps/frontend/src/components/ui/select.tsx
+@@ -3,29 +3,35 @@ import { cn } from "@/lib/utils";
+ import { ChevronDown } from "lucide-react";
+ 
+ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
+-  options: { label: string; value: string }[];
++  options?: { label: string; value: string }[];
+ }
+ 
+-export function Select({ options, className, ...props }: SelectProps) {
+-  return (
+-    <div className="relative">
+-      <select
+-        className={cn(
+-          "w-full h-10 appearance-none rounded-xl bg-[#EDF3F6] border-none px-4 pr-10 text-sm font-medium text-[#091D35] focus:ring-1 focus:ring-[#0087CA] outline-none cursor-pointer",
+-          className
+-        )}
+-        {...props}
+-      >
+-        {options.map((opt) => (
+-          <option key={opt.value} value={opt.value}>
+-            {opt.label}
+-          </option>
+-        ))}
+-      </select>
+-      <ChevronDown
+-        size={16}
+-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+-      />
+-    </div>
+-  );
+-}
++export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
++  ({ options, className, children, ...props }, ref) => {
++    return (
++      <div className="relative">
++        <select
++          ref={ref}
++          className={cn(
++            "w-full h-10 appearance-none rounded bg-[#EDF3F6] border-none px-4 pr-10 text-sm font-medium text-[#091D35] focus:ring-1 focus:ring-[#0087CA] outline-none cursor-pointer",
++            className
++          )}
++          {...props}
++        >
++          {options
++            ? options.map((opt) => (
++                <option key={opt.value} value={opt.value}>
++                  {opt.label}
++                </option>
++              ))
++            : children}
++        </select>
++        <ChevronDown
++          size={16}
++          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
++        />
++      </div>
++    );
++  }
++);
++Select.displayName = "Select";
+diff --git a/apps/frontend/src/components/ui/textarea.tsx b/apps/frontend/src/components/ui/textarea.tsx
+new file mode 100644
+index 00000000..2225abe4
+--- /dev/null
++++ b/apps/frontend/src/components/ui/textarea.tsx
+@@ -0,0 +1,22 @@
++import * as React from "react";
++import { cn } from "@/lib/utils";
++
++export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
++
++const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
++  ({ className, ...props }, ref) => {
++    return (
++      <textarea
++        className={cn(
++          "flex min-h-[80px] w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:ring-offset-slate-950 dark:placeholder:text-slate-400 dark:focus-visible:ring-slate-300",
++          className
++        )}
++        ref={ref}
++        {...props}
++      />
++    );
++  }
++);
++Textarea.displayName = "Textarea";
++
++export { Textarea };
+diff --git a/apps/frontend/src/components/ui/toast.tsx b/apps/frontend/src/components/ui/toast.tsx
+index 5ff3d5c0..dd9fd06d 100644
+--- a/apps/frontend/src/components/ui/toast.tsx
++++ b/apps/frontend/src/components/ui/toast.tsx
+@@ -48,12 +48,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
+             {toast.type === "success" && <CheckCircle2 size={18} className="text-emerald-500" />}
+             {toast.type === "error" && <AlertCircle size={18} className="text-red-500" />}
+             {toast.type === "info" && <Info size={18} className="text-[#0087CA]" />}
+-            
++
+             <p className="text-sm font-bold flex-1">{toast.message}</p>
+-            
++
+             <button
+               onClick={() => removeToast(toast.id)}
+-              className="p-1 hover:bg-black/5 rounded-lg transition-colors"
++              className="p-1 hover:bg-black/5 rounded-md transition-colors"
+             >
+               <X size={14} />
+             </button>
+diff --git a/apps/frontend/src/lib/api.ts b/apps/frontend/src/lib/api.ts
+index ff12e94d..ead98545 100644
+--- a/apps/frontend/src/lib/api.ts
++++ b/apps/frontend/src/lib/api.ts
+@@ -1,7 +1,7 @@
+ import axios from "axios";
+ 
+ const api = axios.create({
+-  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:3000/api",
++  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:3011/api",
+   withCredentials: true,
+ });
+ 
+@@ -81,7 +81,7 @@ export function resolveApiPath(path: string | null | undefined): string {
+   if (!path) return "";
+   if (path.startsWith("http://") || path.startsWith("https://")) return path;
+   if (path.startsWith("/api")) return path;
+-  const base = import.meta.env.VITE_API_URL ?? "http://localhost:3000/api";
++  const base = import.meta.env.VITE_API_URL ?? "http://localhost:3011/api";
+   return `${base.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+ }
+ 
+diff --git a/apps/frontend/src/pages/AdminBillingPage.tsx b/apps/frontend/src/pages/AdminBillingPage.tsx
+index 0c7eaa09..6bcbe3d9 100644
+--- a/apps/frontend/src/pages/AdminBillingPage.tsx
++++ b/apps/frontend/src/pages/AdminBillingPage.tsx
+@@ -75,11 +75,11 @@ export function AdminBillingPage() {
+           <div className="flex items-center gap-3">
+             <h1 className="text-2xl font-semibold text-[#162A42]">Abonnements & Facturation</h1>
+             {isPremium ? (
+-              <Badge className="bg-amber-500 text-white text-xs font-black uppercase tracking-widest px-3 py-0.5 border-none">
++              <Badge className="bg-amber-500 text-white text-xs font-bold uppercase tracking-widest px-3 py-0.5 border-none">
+                 Premium ✨
+               </Badge>
+             ) : (
+-              <Badge className="bg-[#DFE5E7] text-[#091D35] text-xs font-black uppercase tracking-widest px-3 py-0.5 border-none">
++              <Badge className="bg-[#DFE5E7] text-[#091D35] text-xs font-bold uppercase tracking-widest px-3 py-0.5 border-none">
+                 Gratuit
+               </Badge>
+             )}
+@@ -167,7 +167,7 @@ export function AdminBillingPage() {
+         <div className="bg-white border border-[#DFE5E7] rounded-2xl p-6 space-y-5 flex flex-col shadow-sm">
+           <div className="space-y-1">
+             <h3 className="text-lg font-bold text-[#162A42]">Gratuit</h3>
+-            <p className="text-3xl font-black text-[#162A42]">
++            <p className="text-3xl font-bold text-[#162A42]">
+               0 FCFA <span className="text-base font-medium text-slate-400">/ mois</span>
+             </p>
+           </div>
+@@ -195,7 +195,7 @@ export function AdminBillingPage() {
+             disabled={!isPremium}
+             variant="outline"
+             className={cn(
+-              "w-full rounded-xl h-11 font-bold mt-2",
++              "w-full rounded h-11 font-bold mt-2",
+               !isPremium
+                 ? "bg-slate-50 text-slate-400 border-slate-100"
+                 : "border-slate-300 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+@@ -209,14 +209,14 @@ export function AdminBillingPage() {
+         {/* Carte Premium */}
+         <div className="relative bg-[#EDF3F6] border-2 border-[#0087CA] rounded-2xl p-6 space-y-5 flex flex-col shadow-md">
+           <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+-            <span className="bg-[#0087CA] text-white text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-full shadow-sm">
++            <span className="bg-[#0087CA] text-white text-[10px] font-bold uppercase tracking-widest px-4 py-1 rounded-full shadow-sm">
+               Recommandé
+             </span>
+           </div>
+ 
+           <div className="space-y-1">
+             <h3 className="text-lg font-bold text-[#162A42]">Premium</h3>
+-            <p className="text-3xl font-black text-[#162A42]">
++            <p className="text-3xl font-bold text-[#162A42]">
+               2 900 FCFA <span className="text-base font-medium text-slate-400">/ mois</span>
+             </p>
+           </div>
+@@ -235,7 +235,7 @@ export function AdminBillingPage() {
+           <Button
+             disabled={isPremium}
+             className={cn(
+-              "w-full rounded-xl h-11 font-bold mt-2",
++              "w-full rounded h-11 font-bold mt-2",
+               "bg-[#0087CA] hover:bg-[#0087CA]/90 text-white",
+               isPremium && "opacity-50 cursor-not-allowed"
+             )}
+diff --git a/apps/frontend/src/pages/AdminDashboardPage.tsx b/apps/frontend/src/pages/AdminDashboardPage.tsx
+index 4fd8999d..44713c78 100644
+--- a/apps/frontend/src/pages/AdminDashboardPage.tsx
++++ b/apps/frontend/src/pages/AdminDashboardPage.tsx
+@@ -141,7 +141,7 @@ function CustomTooltip({
+ }) {
+   if (!active || !payload) return null;
+   return (
+-    <div className="bg-white border border-[#DFE5E7] rounded-lg p-3 shadow-sm">
++    <div className="bg-white border border-[#DFE5E7] rounded-md p-3 shadow-sm">
+       <p className="text-xs font-bold text-[#162A42] mb-1">{payload[0]?.payload?.day}</p>
+       {payload.map((entry) => (
+         <div key={entry.name} className="flex items-center gap-2 text-xs">
+diff --git a/apps/frontend/src/pages/AllMailsPage.tsx b/apps/frontend/src/pages/AllMailsPage.tsx
+index 34b61367..95814771 100644
+--- a/apps/frontend/src/pages/AllMailsPage.tsx
++++ b/apps/frontend/src/pages/AllMailsPage.tsx
+@@ -8,6 +8,7 @@ import { Mail, Trash2, Archive, ChevronLeft, Inbox as InboxIcon } from "lucide-r
+ import { useThreads, useThread, useMove, useMarkRead } from "@/hooks/useThreads";
+ import { EmailListPanel } from "@/components/email/EmailListPanel";
+ import { useMailView } from "@/hooks/useMailView";
++import emptyInboxImage from "@/assets/inbox.png";
+ 
+ export function AllMailsPage() {
+   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+@@ -68,7 +69,7 @@ export function AllMailsPage() {
+   };
+ 
+   return (
+-    <div className="flex h-full bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100">
++    <div className="flex h-full bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100">
+       <div className={mailListColumnClass(isMobileOrTablet && view === "read")}>
+         <EmailListPanel
+           threads={threads}
+@@ -80,14 +81,24 @@ export function AllMailsPage() {
+           refetch={refetch}
+           onThreadSelect={selectThread}
+           emptyStateTitle="Aucun message"
+-          emptyStateIcon={<InboxIcon className="mx-auto h-10 w-10 text-slate-400" />}
++          emptyStateIcon={
++            <img
++              src={emptyInboxImage}
++              alt="Aucun message"
++              className="mx-auto h-24 w-auto object-contain"
++            />
++          }
+         />
+       </div>
+ 
+       <div className={mailReadColumnClass(isMobileOrTablet && view === "list")}>
+         {!selectedEmail ? (
+           <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-4 text-slate-200">
+-            <Mail size={64} className="text-[#0087CA]" />
++            <img
++              src={emptyInboxImage}
++              alt="Tous les messages"
++              className="w-48 h-auto object-contain"
++            />
+             <h2 className="text-2xl font-bold text-[#162A42]">Tous les messages</h2>
+           </div>
+         ) : (
+diff --git a/apps/frontend/src/pages/BinPage.tsx b/apps/frontend/src/pages/BinPage.tsx
+index 887790c6..f94ce636 100644
+--- a/apps/frontend/src/pages/BinPage.tsx
++++ b/apps/frontend/src/pages/BinPage.tsx
+@@ -15,6 +15,7 @@ import {
+ import { useToast } from "@/components/ui/toast";
+ import { EmailListPanel } from "@/components/email/EmailListPanel";
+ import { useMailView } from "@/hooks/useMailView";
++import emptyIconImage from "@/assets/trash.png";
+ 
+ export function BinPage() {
+   const { showToast } = useToast();
+@@ -94,7 +95,7 @@ export function BinPage() {
+   };
+ 
+   return (
+-    <div className="flex h-full bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100 flex-col">
++    <div className="flex h-full bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100 flex-col">
+       <ConfirmDialog
+         open={showEmptyConfirm}
+         title="Vider la corbeille ?"
+@@ -140,14 +141,20 @@ export function BinPage() {
+             refetch={refetch}
+             onThreadSelect={selectThread}
+             emptyStateTitle="La corbeille est vide"
+-            emptyStateIcon={<InboxIcon className="mx-auto h-10 w-10 text-slate-400" />}
++            emptyStateIcon={
++              <img
++                src={emptyIconImage}
++                alt="La corbeille est vide"
++                className="mx-auto h-24 w-auto object-contain"
++              />
++            }
+           />
+         </div>
+ 
+         <div className={mailReadColumnClass(isMobileOrTablet && view === "list")}>
+           {!selectedEmail ? (
+             <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-4 text-slate-200">
+-              <Trash2 size={64} className="text-[#0087CA]" />
++              <img src={emptyIconImage} alt="Corbeille" className="w-48 h-auto object-contain" />
+               <h2 className="text-2xl font-bold text-[#162A42]">Corbeille</h2>
+             </div>
+           ) : (
+diff --git a/apps/frontend/src/pages/CalendarPage.tsx b/apps/frontend/src/pages/CalendarPage.tsx
+index 70118837..99045c21 100644
+--- a/apps/frontend/src/pages/CalendarPage.tsx
++++ b/apps/frontend/src/pages/CalendarPage.tsx
+@@ -19,6 +19,8 @@ import { useCalendarStore } from "@/hooks/useCalendarStore";
+ import { useCalendar } from "@/hooks/useCalendar";
+ import { CalendarEvent, EventColor } from "@/types/event";
+ import { Loader2 } from "lucide-react";
++import { Textarea } from "@/components/ui/textarea";
++import calendarImage from "@/assets/calendar.png";
+ 
+ type PanelMode = "empty" | "detail" | "form";
+ 
+@@ -593,19 +595,19 @@ export function CalendarPage() {
+           <div className="flex items-center gap-1">
+             <button
+               onClick={() => navigate("prev")}
+-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#DFE5E7] transition-colors text-[#162A42]"
++              className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-[#DFE5E7] transition-colors text-[#162A42]"
+             >
+               <ChevronLeft size={18} />
+             </button>
+             <button
+               onClick={() => navigate("today")}
+-              className="px-3 h-8 text-xs font-bold rounded-lg border border-[#DFE5E7] text-[#162A42] hover:bg-[#DFE5E7] transition-colors"
++              className="px-3 h-8 text-xs font-bold rounded-md border border-[#DFE5E7] text-[#162A42] hover:bg-[#DFE5E7] transition-colors"
+             >
+               Aujourd'hui
+             </button>
+             <button
+               onClick={() => navigate("next")}
+-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#DFE5E7] transition-colors text-[#162A42]"
++              className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-[#DFE5E7] transition-colors text-[#162A42]"
+             >
+               <ChevronRight size={18} />
+             </button>
+@@ -621,7 +623,7 @@ export function CalendarPage() {
+                 key={v.value}
+                 onClick={() => setView(v.value)}
+                 className={cn(
+-                  "px-3 py-1.5 text-xs font-bold rounded-lg transition-colors",
++                  "px-3 py-1.5 text-xs font-bold rounded-md transition-colors",
+                   view === v.value
+                     ? "bg-[#0087CA] text-white"
+                     : "text-[#162A42] border border-[#DFE5E7] hover:bg-[#DFE5E7]"
+@@ -635,7 +637,7 @@ export function CalendarPage() {
+           <Button
+             size="sm"
+             onClick={handleNewEvent}
+-            className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white h-8 rounded-lg gap-1 font-bold text-xs"
++            className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white h-8 rounded-md gap-1 font-bold text-xs"
+           >
+             <Plus size={14} />
+             Événement
+@@ -697,16 +699,14 @@ export function CalendarPage() {
+           {/* ── Empty state ── */}
+           {panelMode === "empty" && (
+             <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-4">
+-              <div className="p-4 bg-[#EDF3F6] rounded-full">
+-                <CalendarDays size={48} className="text-[#9ACEE8]" />
+-              </div>
++              <img src={calendarImage} alt="Calendrier" className="w-48 h-auto object-contain" />
+               <p className="text-sm text-slate-400 font-medium">
+                 Cliquez sur un jour ou un événement
+               </p>
+               <Button
+                 onClick={handleNewEvent}
+                 size="sm"
+-                className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-lg gap-1 font-bold text-xs"
++                className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-md gap-1 font-bold text-xs"
+               >
+                 <Plus size={14} />
+                 Créer un événement
+@@ -791,7 +791,7 @@ export function CalendarPage() {
+               <Button
+                 onClick={handleDelete}
+                 variant="outline"
+-                className="w-full rounded-xl h-11 font-bold text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600 gap-2"
++                className="w-full rounded h-11 font-bold text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600 gap-2"
+               >
+                 <Trash2 size={16} />
+                 Supprimer
+@@ -893,7 +893,7 @@ export function CalendarPage() {
+                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                   Description
+                 </label>
+-                <textarea
++                <Textarea
+                   placeholder="Description (optionnelle)"
+                   value={formData.description}
+                   onChange={(e) =>
+@@ -924,7 +924,7 @@ export function CalendarPage() {
+                 <Button
+                   variant="outline"
+                   onClick={handleCancel}
+-                  className="flex-1 rounded-xl h-11 font-bold"
++                  className="flex-1 rounded h-11 font-bold"
+                 >
+                   Annuler
+                 </Button>
+@@ -932,7 +932,7 @@ export function CalendarPage() {
+                   onClick={handleCreate}
+                   disabled={!formData.title.trim() || !formData.date}
+                   className={cn(
+-                    "flex-1 rounded-xl h-11 font-bold",
++                    "flex-1 rounded h-11 font-bold",
+                     "bg-[#0087CA] hover:bg-[#0087CA]/90 text-white",
+                     (!formData.title.trim() || !formData.date) && "opacity-50 cursor-not-allowed"
+                   )}
+diff --git a/apps/frontend/src/pages/DomainsPage.tsx b/apps/frontend/src/pages/DomainsPage.tsx
+index 6b893466..027106f8 100644
+--- a/apps/frontend/src/pages/DomainsPage.tsx
++++ b/apps/frontend/src/pages/DomainsPage.tsx
+@@ -51,7 +51,7 @@ export function DomainsPage() {
+         </div>
+         <Link
+           to="/inbox"
+-          className="text-xs font-bold text-[#0087CA] hover:bg-[#EDF3F6] px-3 py-1.5 rounded-lg transition-colors"
++          className="text-xs font-bold text-[#0087CA] hover:bg-[#EDF3F6] px-3 py-1.5 rounded-md transition-colors"
+         >
+           Retour à la boîte
+         </Link>
+@@ -65,19 +65,19 @@ export function DomainsPage() {
+       )}
+ 
+       {/* Add Domain Card */}
+-      <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
++      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm space-y-4">
+         <div className="space-y-2">
+           <label className="text-sm font-bold text-[#162A42]">Nouveau domaine</label>
+           <div className="flex gap-2">
+             <input
+-              className="flex-1 h-11 bg-slate-50 border-none rounded-xl px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#0087CA]/20 transition-all"
++              className="flex-1 h-11 bg-slate-50 border-none rounded px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#0087CA]/20 transition-all"
+               value={domainName}
+               onChange={(e) => setDomainName(e.target.value)}
+               placeholder="ex: mon-entreprise.cm"
+               disabled={!isAuthed || isCreating}
+             />
+             <Button
+-              className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl h-11 px-6 font-bold gap-2 shadow-lg shadow-[#0087CA]/10"
++              className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded h-11 px-6 font-bold gap-2 shadow-lg shadow-[#0087CA]/10"
+               disabled={!isAuthed || !domainName.trim() || isCreating}
+               onClick={onAddDomain}
+             >
+@@ -95,7 +95,7 @@ export function DomainsPage() {
+         </h2>
+ 
+         {domains.length === 0 ? (
+-          <div className="bg-slate-50 border-2 border-dashed border-slate-100 rounded-3xl p-12 text-center space-y-3">
++          <div className="bg-slate-50 border-2 border-dashed border-slate-100 rounded-xl p-12 text-center space-y-3">
+             <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center mx-auto shadow-sm text-slate-300">
+               <Plus size={24} />
+             </div>
+@@ -108,7 +108,7 @@ export function DomainsPage() {
+             {domains.map((d) => (
+               <div
+                 key={d.id}
+-                className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-6 transition-all hover:border-[#0087CA]/30"
++                className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm space-y-6 transition-all hover:border-[#0087CA]/30"
+               >
+                 <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+@@ -132,7 +132,7 @@ export function DomainsPage() {
+                     <Button
+                       variant="outline"
+                       size="sm"
+-                      className="rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-[#EDF3F6] hover:text-[#0087CA] hover:border-[#0087CA]/20 h-9"
++                      className="rounded font-bold border-slate-200 text-slate-600 hover:bg-[#EDF3F6] hover:text-[#0087CA] hover:border-[#0087CA]/20 h-9"
+                       disabled={isVerifying}
+                       onClick={() => onVerify(d.id)}
+                     >
+@@ -145,7 +145,7 @@ export function DomainsPage() {
+                 <div className="grid md:grid-cols-2 gap-6 bg-slate-50 rounded-2xl p-4">
+                   <div className="space-y-4">
+                     <div className="space-y-1">
+-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
++                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                         Type / Host
+                       </p>
+                       <p className="text-xs font-mono text-[#162A42] truncate">
+@@ -153,10 +153,10 @@ export function DomainsPage() {
+                       </p>
+                     </div>
+                     <div className="space-y-1">
+-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
++                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                         Valeur attendue
+                       </p>
+-                      <p className="text-xs font-mono bg-white p-2 rounded-lg border border-slate-100 text-[#0087CA] break-all">
++                      <p className="text-xs font-mono bg-white p-2 rounded-md border border-slate-100 text-[#0087CA] break-all">
+                         {d.expectedTxtRecord}
+                       </p>
+                     </div>
+@@ -164,13 +164,13 @@ export function DomainsPage() {
+ 
+                   <div className="space-y-4">
+                     <div className="space-y-1">
+-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
++                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                         Enregistrement SPF
+                       </p>
+                       <p className="text-xs font-mono text-slate-500 truncate">{d.spfRecord}</p>
+                     </div>
+                     <div className="space-y-1">
+-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
++                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                         Enregistrement DMARC
+                       </p>
+                       <p className="text-xs font-mono text-slate-500 truncate">{d.dmarcRecord}</p>
+diff --git a/apps/frontend/src/pages/DraftsPage.tsx b/apps/frontend/src/pages/DraftsPage.tsx
+index 002cd723..c839082f 100644
+--- a/apps/frontend/src/pages/DraftsPage.tsx
++++ b/apps/frontend/src/pages/DraftsPage.tsx
+@@ -52,7 +52,7 @@ export function DraftsPage() {
+   }, [selectedThreadId, threadDetail]);
+ 
+   return (
+-    <div className="flex h-full bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100">
++    <div className="flex h-full bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100">
+       <div className={mailListColumnClass(isMobileOrTablet && view === "read")}>
+         <EmailListPanel
+           threads={threads}
+@@ -72,7 +72,7 @@ export function DraftsPage() {
+       <div className={mailReadColumnClass(isMobileOrTablet && view === "list")}>
+         {!selectedEmail ? (
+           <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-6">
+-            <div className="w-48 h-48 bg-[#EDF3F6] rounded-3xl relative flex items-center justify-center">
++            <div className="w-48 h-48 bg-[#EDF3F6] rounded-xl relative flex items-center justify-center">
+               <Pencil size={64} className="text-[#0087CA]" />
+             </div>
+             <div className="space-y-2">
+diff --git a/apps/frontend/src/pages/FolderShortcuts.tsx b/apps/frontend/src/pages/FolderShortcuts.tsx
+index e5e4a3fb..e60baa8e 100644
+--- a/apps/frontend/src/pages/FolderShortcuts.tsx
++++ b/apps/frontend/src/pages/FolderShortcuts.tsx
+@@ -16,17 +16,20 @@ import { useMailView } from "@/hooks/useMailView";
+ import { useComposeStore } from "@/store/useComposeStore";
+ import { AttachmentPreview } from "@/components/email/AttachmentPreview";
+ import { Attachment } from "@/components/email/AttachmentCard";
++import favoriImage from "@/assets/favori.png";
+ 
+ function FilteredPage({
+   folder,
+   title,
+   icon: Icon,
++  emptyImageSrc,
+   emptyText,
+   emptySubtitle,
+ }: {
+   folder: string;
+   title: string;
+   icon: any;
++  emptyImageSrc?: string;
+   emptyText: string;
+   emptySubtitle?: string;
+ }) {
+@@ -83,7 +86,7 @@ function FilteredPage({
+   }, [selectedThreadId, threadDetail]);
+ 
+   return (
+-    <div className="flex h-full bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100">
++    <div className="flex h-full bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100">
+       <div className={mailListColumnClass(isMobileOrTablet && view === "read")}>
+         <EmailListPanel
+           threads={threads}
+@@ -97,7 +100,17 @@ function FilteredPage({
+           onStarToggle={(thread) => starMutation.mutate(thread.id)}
+           emptyStateTitle={emptyText}
+           emptyStateSubtitle={emptySubtitle}
+-          emptyStateIcon={<Icon className="mx-auto h-10 w-10 text-slate-400" />}
++          emptyStateIcon={
++            emptyImageSrc ? (
++              <img
++                src={emptyImageSrc}
++                alt={emptyText}
++                className="mx-auto h-24 w-auto object-contain"
++              />
++            ) : (
++              <Icon className="mx-auto h-10 w-10 text-slate-400" />
++            )
++          }
+         />
+       </div>
+ 
+@@ -139,7 +152,11 @@ function FilteredPage({
+           />
+         ) : (
+           <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-4 text-slate-200">
+-            <Icon size={64} className="text-[#0087CA]" />
++            {emptyImageSrc ? (
++              <img src={emptyImageSrc} alt={title} className="w-24 h-auto object-contain" />
++            ) : (
++              <Icon size={64} className="text-[#0087CA]" />
++            )}
+             <h2 className="text-2xl font-bold text-[#162A42]">{title}</h2>
+           </div>
+         )}
+@@ -161,6 +178,7 @@ export function StarredPage() {
+       folder="STARRED"
+       title="Suivis"
+       icon={Star}
++      emptyImageSrc={favoriImage}
+       emptyText="Aucun email suivi"
+       emptySubtitle="Étoilez des emails pour les retrouver rapidement"
+     />
+diff --git a/apps/frontend/src/pages/ForgotPasswordPage.tsx b/apps/frontend/src/pages/ForgotPasswordPage.tsx
+index 4de6bc32..f5be1747 100644
+--- a/apps/frontend/src/pages/ForgotPasswordPage.tsx
++++ b/apps/frontend/src/pages/ForgotPasswordPage.tsx
+@@ -44,7 +44,7 @@ export function ForgotPasswordPage() {
+         <img src={logo} alt="Pyramid Mail" className="h-14 w-auto object-contain" />
+       </div>
+ 
+-      <div className="w-full max-w-md bg-white rounded-3xl p-8 md:p-12 shadow-sm relative overflow-hidden">
++      <div className="w-full max-w-md bg-white rounded-xl p-8 md:p-12 shadow-sm relative overflow-hidden">
+         {/* Step 1: Forgot Password */}
+         {step === 1 && (
+           <div className="space-y-8">
+@@ -63,7 +63,7 @@ export function ForgotPasswordPage() {
+                 <Input
+                   type="email"
+                   placeholder="name@example.com"
+-                  className="bg-[#EDF3F6] border-none h-12 rounded-xl px-4"
++                  className="bg-[#EDF3F6] border-none h-12 rounded px-4"
+                   value={email}
+                   onChange={(e) => setEmail(e.target.value)}
+                   required
+@@ -71,7 +71,7 @@ export function ForgotPasswordPage() {
+               </div>
+               <Button
+                 type="submit"
+-                className="w-full h-12 bg-[#0087CA] hover:bg-[#0087CA]/90 rounded-xl font-bold text-lg shadow-lg shadow-[#0087CA]/20"
++                className="w-full h-12 bg-[#0087CA] hover:bg-[#0087CA]/90 rounded font-bold text-lg shadow-lg shadow-[#0087CA]/20"
+               >
+                 Reset Password
+               </Button>
+@@ -107,7 +107,7 @@ export function ForgotPasswordPage() {
+ 
+               <Button
+                 type="submit"
+-                className="w-full h-12 bg-[#0087CA] hover:bg-[#0087CA]/90 rounded-xl font-bold text-lg"
++                className="w-full h-12 bg-[#0087CA] hover:bg-[#0087CA]/90 rounded font-bold text-lg"
+               >
+                 Continue
+               </Button>
+@@ -144,7 +144,7 @@ export function ForgotPasswordPage() {
+                 <Input
+                   type="password"
+                   placeholder="••••••••"
+-                  className="bg-[#EDF3F6] border-none h-12 rounded-xl px-4"
++                  className="bg-[#EDF3F6] border-none h-12 rounded px-4"
+                   value={password}
+                   onChange={(e) => setPassword(e.target.value)}
+                   required
+@@ -157,7 +157,7 @@ export function ForgotPasswordPage() {
+                 <Input
+                   type="password"
+                   placeholder="••••••••"
+-                  className="bg-[#EDF3F6] border-none h-12 rounded-xl px-4"
++                  className="bg-[#EDF3F6] border-none h-12 rounded px-4"
+                   value={confirmPassword}
+                   onChange={(e) => setConfirmPassword(e.target.value)}
+                   required
+@@ -168,7 +168,7 @@ export function ForgotPasswordPage() {
+ 
+               <Button
+                 type="submit"
+-                className="w-full h-12 bg-[#0087CA] hover:bg-[#0087CA]/90 rounded-xl font-bold text-lg"
++                className="w-full h-12 bg-[#0087CA] hover:bg-[#0087CA]/90 rounded font-bold text-lg"
+               >
+                 Reset Password
+               </Button>
+@@ -208,7 +208,7 @@ export function ForgotPasswordPage() {
+         {/* Logo Pyramid Mail Bottom */}
+         <div className="mt-12 flex flex-col items-center opacity-40">
+           <span className="text-[#162A42] font-bold text-lg tracking-tight">
+-            PYRAM<span className="text-[#0087CA] font-black">ID</span>
++            PYRAM<span className="text-[#0087CA] font-bold">ID</span>
+           </span>
+           <span className="text-[#0087CA] text-[8px] font-bold -mt-1 self-end italic">Mail</span>
+         </div>
+diff --git a/apps/frontend/src/pages/InboxPage.tsx b/apps/frontend/src/pages/InboxPage.tsx
+index 9006971a..5573071b 100644
+--- a/apps/frontend/src/pages/InboxPage.tsx
++++ b/apps/frontend/src/pages/InboxPage.tsx
+@@ -15,6 +15,7 @@ import {
+   AlertCircle,
+   Paperclip,
+ } from "lucide-react";
++import emptyInboxImage from "@/assets/inbox.png";
+ import { useTranslation } from "react-i18next";
+ import { Button } from "@/components/ui/button";
+ import { Separator } from "@/components/ui/separator";
+@@ -182,7 +183,7 @@ export function InboxPage() {
+   }, [threads]);
+ 
+   return (
+-    <div className="flex h-full bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100">
++    <div className="flex h-full bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100">
+       <div className={mailListColumnClass(isMobileOrTablet && view === "read")}>
+         <EmailListPanel
+           threads={filteredThreads}
+@@ -209,7 +210,13 @@ export function InboxPage() {
+           showTabs={isInbox}
+           emptyStateTitle="Votre boîte est vide"
+           emptyStateSubtitle="C'est le moment idéal pour se détendre."
+-          emptyStateIcon={<InboxIcon className="mx-auto h-10 w-10 text-slate-400" />}
++          emptyStateIcon={
++            <img
++              src={emptyInboxImage}
++              alt="Empty inbox"
++              className="mx-auto h-24 w-auto object-contain"
++            />
++          }
+         />
+       </div>
+ 
+@@ -276,8 +283,8 @@ export function InboxPage() {
+                   },
+                   { label: "Starred messages", count: threads.filter((e) => e.isStarred).length },
+                 ].map((stat, i) => (
+-                  <div key={i} className="bg-[#EDF3F6] p-8 rounded-3xl space-y-2">
+-                    <div className="text-4xl font-black text-[#0087CA]">{stat.count}</div>
++                  <div key={i} className="bg-[#EDF3F6] p-8 rounded-xl space-y-2">
++                    <div className="text-4xl font-bold text-[#0087CA]">{stat.count}</div>
+                     <div className="text-sm font-bold text-slate-500">{stat.label}</div>
+                   </div>
+                 ))}
+@@ -295,19 +302,18 @@ export function InboxPage() {
+                   </p>
+                   <Button
+                     onClick={() => openCompose()}
+-                    className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl gap-2 h-11 px-6 font-bold shadow-lg shadow-[#0087CA]/20"
++                    className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-md gap-2 h-11 px-6 font-bold shadow-lg shadow-[#0087CA]/20"
+                   >
+                     <Plus size={18} />
+                     {t("inbox.newMessage")}
+                   </Button>
+                 </div>
+-                <div className="shrink-0">
+-                  <div className="w-64 h-48 bg-[#EDF3F6] rounded-3xl relative flex items-center justify-center">
+-                    <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-[#9ACEE8] rounded-2xl rotate-3 shadow-xl flex items-center justify-center">
+-                      <Mail size={48} className="text-white -rotate-3" />
+-                    </div>
+-                    <div className="w-24 h-24 bg-[#0087CA] rounded-full absolute -top-4 -right-4 border-8 border-white" />
+-                  </div>
++                <div className="shrink-0 flex items-center justify-center">
++                  <img
++                    src={emptyInboxImage}
++                    alt="Illustration"
++                    className="w-64 h-auto object-contain"
++                  />
+                 </div>
+               </div>
+             </div>
+diff --git a/apps/frontend/src/pages/LoginPage.tsx b/apps/frontend/src/pages/LoginPage.tsx
+index cd73ca9f..0849fba9 100644
+--- a/apps/frontend/src/pages/LoginPage.tsx
++++ b/apps/frontend/src/pages/LoginPage.tsx
+@@ -9,6 +9,7 @@ import { authService } from "@/services/auth.service";
+ import { AUTH_QUERY_KEY } from "@/hooks/useAuth";
+ import { LoginAd } from "@/components/ads/LoginAd";
+ import logo from "@/assets/logo.png";
++import loginImage from "@/assets/pymail-login.gif";
+ 
+ export function LoginPage() {
+   const navigate = useNavigate();
+@@ -43,33 +44,14 @@ export function LoginPage() {
+   };
+ 
+   return (
+-    <div className="min-h-screen flex bg-white font-sans text-[#091D35]">
++    <div className="h-screen flex bg-white font-sans text-[#091D35]">
+       {/* Colonne Gauche - Illustration (Visible uniquement sur Desktop) */}
+-      <div className="hidden md:flex md:w-[40%] bg-[#EDF3F6] flex-col items-center justify-between p-12">
+-        <div className="w-full flex justify-center">
+-          <img src={logo} alt="Pyramid Mail" className="h-14 w-auto object-contain" />
+-        </div>
+-
+-        <div className="flex-1 flex items-center justify-center">
+-          <div className="relative w-64 h-64 bg-[#9ACEE8]/30 rounded-full flex items-center justify-center">
+-            {/* Placeholder Illustration */}
+-            <div className="w-48 h-48 bg-[#0087CA] rounded-2xl flex items-center justify-center shadow-lg relative">
+-              <Mail size={80} className="text-white" />
+-              <div className="absolute -bottom-4 -right-4 w-20 h-20 bg-[#9ACEE8] rounded-full border-4 border-white flex items-center justify-center">
+-                <div className="w-8 h-8 bg-white rounded-sm" />
+-              </div>
+-            </div>
+-          </div>
+-        </div>
+-
+-        <div className="w-full text-center space-y-1">
+-          <div className="font-bold text-lg">Pyramid-mail.cm</div>
+-          <div className="text-slate-400 text-sm">@Pyramid mail 2025</div>
+-        </div>
++      <div className="hidden md:block md:w-1/2 h-full">
++        <img src={loginImage} alt="Pyramid Mail" className="w-full h-full object-cover" />
+       </div>
+ 
+       {/* Colonne Droite - Formulaire */}
+-      <div className="w-full md:w-[60%] flex flex-col items-center justify-center p-6 md:p-24 relative">
++      <div className="w-full md:w-1/2 h-full flex flex-col items-center justify-center p-6 md:p-24 relative overflow-y-auto">
+         {/* Logo Mobile / Top Right Desktop */}
+         <div className="absolute top-8 right-8 hidden md:block">
+           <img src={logo} alt="Pyramid Mail" className="h-10 w-auto object-contain" />
+@@ -87,13 +69,11 @@ export function LoginPage() {
+ 
+           <form onSubmit={onSubmit} className="space-y-6">
+             <div className="space-y-1.5">
+-              <label className="text-sm font-semibold text-[#162A42] uppercase tracking-wider">
+-                Email or phone number
+-              </label>
++              <label className="text-sm font-semibold text-[#162A42]">Email or phone number</label>
+               <Input
+                 type="email"
+                 placeholder="Enter your email"
+-                className="bg-[#EDF3F6] border-none h-12 rounded-xl px-4"
++                className="bg-[#EDF3F6] border-none h-12 rounded px-4"
+                 value={email}
+                 onChange={(e) => setEmail(e.target.value)}
+                 required
+@@ -101,14 +81,12 @@ export function LoginPage() {
+             </div>
+ 
+             <div className="space-y-1.5">
+-              <label className="text-sm font-semibold text-[#162A42] uppercase tracking-wider">
+-                Enter password
+-              </label>
++              <label className="text-sm font-semibold text-[#162A42]">Enter password</label>
+               <div className="relative">
+                 <Input
+                   type={showPassword ? "text" : "password"}
+                   placeholder="Enter password"
+-                  className="bg-[#EDF3F6] border-none h-12 rounded-xl px-4 pr-12"
++                  className="bg-[#EDF3F6] border-none h-12 rounded px-4 pr-12"
+                   value={password}
+                   onChange={(e) => setPassword(e.target.value)}
+                   required
+@@ -144,7 +122,7 @@ export function LoginPage() {
+             <Button
+               type="submit"
+               disabled={isLoading}
+-              className="w-full h-12 bg-[#0087CA] hover:bg-[#0087CA]/90 rounded-xl font-bold text-lg shadow-md shadow-[#0087CA]/20 disabled:opacity-60"
++              className="w-full h-12 bg-[#0087CA] hover:bg-[#0087CA]/90 rounded font-bold text-lg shadow-md shadow-[#0087CA]/20 disabled:opacity-60"
+             >
+               {isLoading ? <Loader2 size={20} className="animate-spin" /> : "Sign in"}
+             </Button>
+@@ -162,7 +140,7 @@ export function LoginPage() {
+         <div className="md:hidden mt-12">
+           <div className="flex flex-col items-center opacity-50">
+             <span className="text-[#162A42] font-bold text-lg tracking-tight">
+-              PYRAM<span className="text-[#0087CA] font-black">ID</span>
++              PYRAM<span className="text-[#0087CA] font-bold">ID</span>
+             </span>
+             <span className="text-[#0087CA] text-[8px] font-bold -mt-1 self-end italic">Mail</span>
+           </div>
+diff --git a/apps/frontend/src/pages/ProfilePage.tsx b/apps/frontend/src/pages/ProfilePage.tsx
+index 16529713..40532f43 100644
+--- a/apps/frontend/src/pages/ProfilePage.tsx
++++ b/apps/frontend/src/pages/ProfilePage.tsx
+@@ -23,6 +23,7 @@ import { useToast } from "@/components/ui/toast";
+ import { resolveApiPath } from "@/lib/api";
+ import { getUploadErrorMessage } from "@/lib/upload-errors";
+ import { useRef } from "react";
++import { Textarea } from "@/components/ui/textarea";
+ 
+ export function ProfilePage() {
+   const { showToast } = useToast();
+@@ -121,12 +122,12 @@ export function ProfilePage() {
+   }
+ 
+   return (
+-    <div className="flex h-full bg-[#EDF3F6] rounded-3xl overflow-hidden shadow-sm border border-slate-100">
++    <div className="flex h-full bg-[#EDF3F6] rounded-xl overflow-hidden shadow-sm border border-slate-100">
+       <ScrollArea className="flex-1">
+         <div className="max-w-[680px] mx-auto py-12 px-6 space-y-12">
+           {/* Header Section */}
+           <div className="text-center space-y-4">
+-            <h1 className="text-3xl font-black text-[#162A42]">Profil</h1>
++            <h1 className="text-3xl font-bold text-[#162A42]">Profil</h1>
+             <p className="text-[#091D35] opacity-60 font-medium">
+               Gérez vos informations personnelles et préférences
+             </p>
+@@ -147,7 +148,7 @@ export function ProfilePage() {
+             >
+               <div
+                 className={cn(
+-                  "w-[120px] h-[120px] rounded-full flex items-center justify-center text-4xl font-black shadow-xl transition-transform duration-300 group-hover:scale-105 overflow-hidden",
++                  "w-[120px] h-[120px] rounded-full flex items-center justify-center text-4xl font-bold shadow-xl transition-transform duration-300 group-hover:scale-105 overflow-hidden",
+                   !user.avatar && getUserColor(user.displayName || user.email)
+                 )}
+               >
+@@ -205,7 +206,7 @@ export function ProfilePage() {
+                   <Input
+                     value={user.email}
+                     disabled
+-                    className="h-12 bg-slate-50 border-none rounded-xl px-4 font-medium text-slate-400 cursor-not-allowed pr-10 w-full"
++                    className="h-12 bg-slate-50 border-none rounded px-4 font-medium text-slate-400 cursor-not-allowed pr-10 w-full"
+                   />
+                   <Info
+                     size={16}
+@@ -246,7 +247,7 @@ export function ProfilePage() {
+                     {formData.bio.length}/160
+                   </span>
+                 </div>
+-                <textarea
++                <Textarea
+                   value={formData.bio}
+                   onChange={(e) => setFormData({ ...formData, bio: e.target.value.slice(0, 160) })}
+                   placeholder="Dites-nous en un peu plus sur vous..."
+@@ -259,7 +260,7 @@ export function ProfilePage() {
+               <Button
+                 onClick={handleSave}
+                 disabled={updateProfileMutation.isPending}
+-                className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl h-12 px-8 font-bold shadow-lg shadow-[#0087CA]/20 transition-all active:scale-95 disabled:opacity-70"
++                className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded h-12 px-8 font-bold shadow-lg shadow-[#0087CA]/20 transition-all active:scale-95 disabled:opacity-70"
+               >
+                 {updateProfileMutation.isPending ? (
+                   <Loader2 className="animate-spin mr-2" size={18} />
+@@ -279,7 +280,7 @@ export function ProfilePage() {
+           <div className="space-y-6">
+             <div className="flex items-center gap-4 px-4">
+               <Separator className="flex-1 bg-red-100" />
+-              <span className="text-xs font-black text-red-400 uppercase tracking-[0.2em] whitespace-nowrap">
++              <span className="text-xs font-bold text-red-400 uppercase tracking-[0.2em] whitespace-nowrap">
+                 Zone de danger
+               </span>
+               <Separator className="flex-1 bg-red-100" />
+@@ -324,7 +325,7 @@ export function ProfilePage() {
+             </div>
+ 
+             <div className="text-center space-y-2">
+-              <h3 className="text-2xl font-black text-[#162A42]">Êtes-vous sûr ?</h3>
++              <h3 className="text-2xl font-bold text-[#162A42]">Êtes-vous sûr ?</h3>
+               <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                 Cette action supprimera définitivement votre compte et toutes les données associées.
+               </p>
+@@ -332,13 +333,13 @@ export function ProfilePage() {
+ 
+             <div className="space-y-4">
+               <div className="space-y-2">
+-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+-                  Tapez <span className="text-red-500 font-black">DELETE</span> pour confirmer
++                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
++                  Tapez <span className="text-red-500 font-bold">DELETE</span> pour confirmer
+                 </label>
+                 <Input
+                   value={deleteConfirm}
+                   onChange={(e) => setDeleteConfirm(e.target.value)}
+-                  className="h-12 bg-slate-50 border-2 border-slate-100 rounded-xl px-4 font-black text-center text-red-600 uppercase focus-visible:ring-red-500/20"
++                  className="h-12 bg-slate-50 border-2 border-slate-100 rounded-xl px-4 font-bold text-center text-red-600 uppercase focus-visible:ring-red-500/20"
+                   placeholder="DELETE"
+                 />
+               </div>
+@@ -348,7 +349,7 @@ export function ProfilePage() {
+                   disabled={deleteConfirm !== "DELETE"}
+                   onClick={handleDeleteAccount}
+                   className={cn(
+-                    "w-full h-12 rounded-xl font-bold transition-all",
++                    "w-full h-12 rounded font-bold transition-all",
+                     deleteConfirm === "DELETE"
+                       ? "bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-200"
+                       : "bg-slate-100 text-slate-400"
+diff --git a/apps/frontend/src/pages/SearchResultsPage.tsx b/apps/frontend/src/pages/SearchResultsPage.tsx
+index 6a42a851..3ddbcc5b 100644
+--- a/apps/frontend/src/pages/SearchResultsPage.tsx
++++ b/apps/frontend/src/pages/SearchResultsPage.tsx
+@@ -67,7 +67,7 @@ export function SearchResultsPage() {
+   };
+ 
+   return (
+-    <div className="flex h-full bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100">
++    <div className="flex h-full bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100">
+       <div className={mailListColumnClass(isMobileOrTablet && view === "read")}>
+         <div className="p-4 border-b border-slate-100">
+           <h1 className="text-sm font-bold text-[#162A42] truncate">Résultats pour '{query}'</h1>
+diff --git a/apps/frontend/src/pages/SendMailsPage.tsx b/apps/frontend/src/pages/SendMailsPage.tsx
+index 2a873b61..fcd3ad54 100644
+--- a/apps/frontend/src/pages/SendMailsPage.tsx
++++ b/apps/frontend/src/pages/SendMailsPage.tsx
+@@ -15,6 +15,7 @@ import { useMailView } from "@/hooks/useMailView";
+ import { useComposeStore } from "@/store/useComposeStore";
+ import { AttachmentPreview } from "@/components/email/AttachmentPreview";
+ import { Attachment } from "@/components/email/AttachmentCard";
++import emptyIconImage from "@/assets/envoi.png";
+ 
+ export function SendMailsPage() {
+   const { open: openCompose } = useComposeStore();
+@@ -73,7 +74,7 @@ export function SendMailsPage() {
+   }, [selectedThreadId, threadDetail]);
+ 
+   return (
+-    <div className="flex h-full bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100">
++    <div className="flex h-full bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100">
+       <div className={mailListColumnClass(isMobileOrTablet && view === "read")}>
+         <EmailListPanel
+           threads={threads}
+@@ -87,7 +88,13 @@ export function SendMailsPage() {
+           onStarToggle={(thread) => starMutation.mutate(thread.id)}
+           emptyStateTitle="Aucun e-mail envoyé"
+           emptyStateSubtitle="Les e-mails que vous envoyez apparaîtront ici."
+-          emptyStateIcon={<InboxIcon className="mx-auto h-10 w-10 text-slate-400" />}
++          emptyStateIcon={
++            <img
++              src={emptyIconImage}
++              alt="Aucun e-mail envoyé"
++              className="mx-auto h-24 w-auto object-contain"
++            />
++          }
+         />
+       </div>
+ 
+@@ -129,8 +136,12 @@ export function SendMailsPage() {
+           />
+         ) : (
+           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-6">
+-            <div className="w-48 h-48 bg-[#EDF3F6] rounded-3xl relative flex items-center justify-center">
+-              <InboxIcon size={64} className="text-[#0087CA]" />
++            <div className="w-48 h-48 relative flex items-center justify-center">
++              <img
++                src={emptyIconImage}
++                alt="Messages envoyés"
++                className="w-48 h-auto object-contain"
++              />
+             </div>
+             <div className="space-y-2">
+               <h2 className="text-2xl font-bold text-[#162A42]">Messages envoyés</h2>
+diff --git a/apps/frontend/src/pages/SettingsPage.tsx b/apps/frontend/src/pages/SettingsPage.tsx
+index 693c511a..6651aaea 100644
+--- a/apps/frontend/src/pages/SettingsPage.tsx
++++ b/apps/frontend/src/pages/SettingsPage.tsx
+@@ -38,6 +38,8 @@ import { useToast } from "@/components/ui/toast";
+ import { useAuth } from "@/hooks/useAuth";
+ import { usePlan } from "@/hooks/usePlan";
+ import { Link } from "react-router-dom";
++import { Select } from "@/components/ui/select";
++import { Textarea } from "@/components/ui/textarea";
+ 
+ type SettingsSection =
+   | "general"
+@@ -130,7 +132,7 @@ export function SettingsPage() {
+   }
+ 
+   return (
+-    <div className="flex h-full flex-col bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100">
++    <div className="flex h-full flex-col bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100">
+       <div className="px-4 md:px-8 pt-6 pb-2 shrink-0 border-b border-slate-100">
+         <h1 className="text-xl font-bold text-[#162A42]">Paramètres</h1>
+         <p className="text-xs text-slate-400 font-medium mt-1">
+@@ -179,26 +181,26 @@ export function SettingsPage() {
+                     <label className="text-sm font-bold text-[#162A42]">
+                       Langue de l'interface
+                     </label>
+-                    <select
+-                      className="w-full h-11 bg-[#EDF3F6] border-none rounded-xl px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#0087CA]/20"
++                    <Select
++                      className="w-full h-11 bg-[#EDF3F6] border-none rounded px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#0087CA]/20"
+                       value={localSettings.language}
+                       onChange={(e) => handleUpdate({ language: e.target.value })}
+                     >
+                       <option value="fr">Français (Cameroun)</option>
+                       <option value="en">English (US)</option>
+-                    </select>
++                    </Select>
+                   </div>
+ 
+                   <div className="grid gap-2">
+                     <label className="text-sm font-bold text-[#162A42]">Fuseau horaire</label>
+-                    <select
+-                      className="w-full h-11 bg-[#EDF3F6] border-none rounded-xl px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#0087CA]/20"
++                    <Select
++                      className="w-full h-11 bg-[#EDF3F6] border-none rounded px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#0087CA]/20"
+                       value={localSettings.timezone}
+                       onChange={(e) => handleUpdate({ timezone: e.target.value })}
+                     >
+                       <option value="Africa/Douala">GMT+01:00 Douala, Cameroun</option>
+                       <option value="UTC">UTC (Universal Coordinated Time)</option>
+-                    </select>
++                    </Select>
+                   </div>
+ 
+                   <div className="bg-[#EDF3F6] rounded-2xl p-4 space-y-3">
+@@ -348,7 +350,7 @@ export function SettingsPage() {
+                   </div>
+ 
+                   <div className="grid gap-2">
+-                    <textarea
++                    <Textarea
+                       className="w-full min-h-[160px] bg-[#EDF3F6] border-none rounded-2xl p-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#0087CA]/20 resize-none"
+                       placeholder="Cordialement,\nJean-Marc Bassahak"
+                       value={localSettings.signatureContent}
+@@ -437,12 +439,12 @@ export function SettingsPage() {
+                 </div>
+ 
+                 <div className="space-y-4">
+-                  <div className="p-8 border-2 border-dashed border-slate-100 rounded-3xl flex flex-col items-center justify-center text-center space-y-4">
++                  <div className="p-8 border-2 border-dashed border-slate-100 rounded-xl flex flex-col items-center justify-center text-center space-y-4">
+                     <Filter size={48} className="text-slate-100" />
+                     <p className="text-sm font-bold text-slate-400">
+                       Aucun filtre créé pour le moment
+                     </p>
+-                    <Button className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl gap-2 h-10 font-bold">
++                    <Button className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded gap-2 h-10 font-bold">
+                       Créer un nouveau filtre
+                     </Button>
+                   </div>
+@@ -460,7 +462,7 @@ export function SettingsPage() {
+                 </div>
+ 
+                 <div className="space-y-4">
+-                  <div className="p-6 bg-[#EDF3F6] rounded-3xl flex items-center justify-between">
++                  <div className="p-6 bg-[#EDF3F6] rounded-xl flex items-center justify-between">
+                     <div className="flex items-center gap-4">
+                       <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#0087CA] font-bold shadow-sm">
+                         JM
+@@ -531,7 +533,7 @@ export function SettingsPage() {
+                       </label>
+                       <Input
+                         type="date"
+-                        className="bg-[#EDF3F6] border-none rounded-xl"
++                        className="bg-[#EDF3F6] border-none rounded"
+                         value={localSettings.vacationStart || ""}
+                         onChange={(e) => handleUpdate({ vacationStart: e.target.value })}
+                         disabled={!localSettings.vacationEnabled}
+@@ -543,7 +545,7 @@ export function SettingsPage() {
+                       </label>
+                       <Input
+                         type="date"
+-                        className="bg-[#EDF3F6] border-none rounded-xl"
++                        className="bg-[#EDF3F6] border-none rounded"
+                         value={localSettings.vacationEnd || ""}
+                         onChange={(e) => handleUpdate({ vacationEnd: e.target.value })}
+                         disabled={!localSettings.vacationEnabled}
+@@ -555,7 +557,7 @@ export function SettingsPage() {
+                     <label className="text-xs font-bold text-slate-400 uppercase">Objet</label>
+                     <Input
+                       placeholder="Absence du bureau"
+-                      className="bg-[#EDF3F6] border-none rounded-xl"
++                      className="bg-[#EDF3F6] border-none rounded"
+                       value={localSettings.vacationSubject || ""}
+                       onChange={(e) => handleUpdate({ vacationSubject: e.target.value })}
+                       disabled={!localSettings.vacationEnabled}
+@@ -564,7 +566,7 @@ export function SettingsPage() {
+ 
+                   <div className="grid gap-2">
+                     <label className="text-xs font-bold text-slate-400 uppercase">Message</label>
+-                    <textarea
++                    <Textarea
+                       className="w-full min-h-[120px] bg-[#EDF3F6] border-none rounded-2xl p-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#0087CA]/20 resize-none"
+                       placeholder="Je serai de retour le..."
+                       value={localSettings.vacationMessage || ""}
+@@ -585,7 +587,7 @@ export function SettingsPage() {
+ 
+                 <div className="space-y-6">
+                   {/* Password Change */}
+-                  <div className="p-6 bg-[#EDF3F6] rounded-3xl space-y-4">
++                  <div className="p-6 bg-[#EDF3F6] rounded-xl space-y-4">
+                     <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-4">
+                         <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-[#0087CA] shadow-sm">
+@@ -700,7 +702,7 @@ export function SettingsPage() {
+                         variant="ghost"
+                         size="sm"
+                         onClick={() => revokeAllSessions()}
+-                        className="text-red-500 hover:bg-red-50 font-bold rounded-lg h-8 text-[10px]"
++                        className="text-red-500 hover:bg-red-50 font-bold rounded-md h-8 text-[10px]"
+                       >
+                         Tout révoquer
+                       </Button>
+@@ -729,7 +731,7 @@ export function SettingsPage() {
+                                   {session.device || "Appareil inconnu"}
+                                 </p>
+                                 {session.isCurrent && (
+-                                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-none text-[8px] font-black uppercase px-1.5 h-4">
++                                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-none text-[8px] font-bold uppercase px-1.5 h-4">
+                                     Actuelle
+                                   </Badge>
+                                 )}
+@@ -761,7 +763,7 @@ export function SettingsPage() {
+                     <h3 className="text-sm font-bold text-red-500 mb-4 uppercase tracking-widest">
+                       Zone de danger
+                     </h3>
+-                    <div className="p-6 border-2 border-red-50 rounded-3xl flex items-center justify-between">
++                    <div className="p-6 border-2 border-red-50 rounded-xl flex items-center justify-between">
+                       <div className="space-y-1">
+                         <p className="text-sm font-bold text-[#162A42]">Supprimer mon compte</p>
+                         <p className="text-xs text-slate-400">
+@@ -770,7 +772,7 @@ export function SettingsPage() {
+                       </div>
+                       <Button
+                         variant="ghost"
+-                        className="text-red-500 hover:bg-red-50 rounded-xl font-bold"
++                        className="text-red-500 hover:bg-red-50 rounded font-bold"
+                       >
+                         <Trash2 size={18} className="mr-2" /> Supprimer
+                       </Button>
+@@ -869,7 +871,7 @@ export function SettingsPage() {
+           <Button
+             onClick={handleSave}
+             disabled={updateSettingsMutation.isPending}
+-            className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl gap-2 h-11 px-8 font-bold shadow-lg shadow-[#0087CA]/20 disabled:opacity-70"
++            className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded gap-2 h-11 px-8 font-bold shadow-lg shadow-[#0087CA]/20 disabled:opacity-70"
+           >
+             {updateSettingsMutation.isPending ? (
+               <Loader2 className="animate-spin" size={18} />
+diff --git a/apps/frontend/src/pages/SignUpPage.tsx b/apps/frontend/src/pages/SignUpPage.tsx
+index 7002f062..11e7a980 100644
+--- a/apps/frontend/src/pages/SignUpPage.tsx
++++ b/apps/frontend/src/pages/SignUpPage.tsx
+@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
+ import { Input } from "@/components/ui/input";
+ import { authService } from "@/services/auth.service";
+ import logo from "@/assets/logo.png";
++import loginImage from "@/assets/pymail-login.gif";
+ 
+ export function SignUpPage() {
+   const navigate = useNavigate();
+@@ -53,34 +54,20 @@ export function SignUpPage() {
+   };
+ 
+   return (
+-    <div className="min-h-screen flex bg-white font-sans text-[#091D35]">
++    <div className="h-screen flex bg-white font-sans text-[#091D35]">
+       {/* Colonne Gauche - Illustration */}
+-      <div className="hidden md:flex md:w-[40%] bg-[#EDF3F6] flex-col items-center justify-between p-12">
+-        <div className="w-full flex justify-center">
+-          <img src={logo} alt="Pyramid Mail" className="h-14 w-auto object-contain" />
+-        </div>
+-
+-        <div className="flex-1 flex items-center justify-center">
+-          <div className="relative w-64 h-64 bg-[#9ACEE8]/30 rounded-full flex items-center justify-center">
+-            <div className="w-48 h-48 bg-[#0087CA] rounded-2xl flex items-center justify-center shadow-lg relative">
+-              <Mail size={80} className="text-white" />
+-            </div>
+-          </div>
+-        </div>
+-
+-        <div className="w-full text-center space-y-1">
+-          <div className="font-bold text-lg">Pyramid-mail.cm</div>
+-          <div className="text-slate-400 text-sm">@Pyramid mail 2025</div>
+-        </div>
++      <div className="hidden md:block md:w-1/2 h-full">
++        <img src={loginImage} alt="Pyramid Mail" className="w-full h-full object-cover" />
+       </div>
+ 
+       {/* Colonne Droite - Formulaire */}
+-      <div className="w-full md:w-[60%] flex flex-col items-center justify-center p-6 md:p-24 relative">
+-        <div className="absolute top-8 right-8 hidden md:block">
++      <div className="w-full md:w-1/2 h-full flex flex-col items-center p-6 md:p-24 relative overflow-y-auto">
++        {/* <div className="absolute top-8 right-8 hidden md:block">
+           <img src={logo} alt="Pyramid Mail" className="h-10 w-auto object-contain" />
+-        </div>
++        </div> */}
+ 
+         <div className="w-full max-w-md space-y-8">
++          <img src={logo} alt="Pyramid Mail" className="h-10 lg:h-16 w-auto object-contain mb-4" />
+           <div className="space-y-2">
+             <h1 className="text-3xl font-bold text-[#162A42]">Create your account</h1>
+             <p className="text-slate-500 font-medium">Precision Curator account</p>
+@@ -88,12 +75,10 @@ export function SignUpPage() {
+ 
+           <form onSubmit={onSubmit} className="space-y-5">
+             <div className="space-y-1.5">
+-              <label className="text-xs font-bold text-[#162A42] uppercase tracking-wider">
+-                Full name
+-              </label>
++              <label className="text-xs font-bold text-[#162A42]">Full name</label>
+               <Input
+                 placeholder="John Doe"
+-                className="bg-[#EDF3F6] border-none h-12 rounded-xl px-4"
++                className="bg-[#EDF3F6] border-none h-12 rounded px-4"
+                 value={fullName}
+                 onChange={(e) => setFullName(e.target.value)}
+                 required
+@@ -101,13 +86,11 @@ export function SignUpPage() {
+             </div>
+ 
+             <div className="space-y-1.5">
+-              <label className="text-xs font-bold text-[#162A42] uppercase tracking-wider">
+-                Email address
+-              </label>
++              <label className="text-xs font-bold text-[#162A42]">Email address</label>
+               <Input
+                 type="email"
+                 placeholder="name@pyramid.com"
+-                className="bg-[#EDF3F6] border-none h-12 rounded-xl px-4"
++                className="bg-[#EDF3F6] border-none h-12 rounded px-4"
+                 value={email}
+                 onChange={(e) => setEmail(e.target.value)}
+                 required
+@@ -115,39 +98,37 @@ export function SignUpPage() {
+             </div>
+ 
+             <div className="space-y-1.5">
+-              <label className="text-xs font-bold text-[#162A42] uppercase tracking-wider">
++              <label className="text-xs font-bold text-[#162A42]">
+                 Téléphone <span className="font-normal text-slate-400">(optionnel)</span>
+               </label>
+               <Input
+                 type="tel"
+                 placeholder="+237 6XX XXX XXX"
+-                className="bg-[#EDF3F6] border-none h-12 rounded-xl px-4"
++                className="bg-[#EDF3F6] border-none h-12 rounded px-4"
+                 value={phone}
+                 onChange={(e) => setPhone(e.target.value)}
+               />
+             </div>
+ 
+             <div className="space-y-1.5">
+-              <label className="text-xs font-bold text-[#162A42] uppercase tracking-wider">
++              <label className="text-xs font-bold text-[#162A42]">
+                 Ville <span className="font-normal text-slate-400">(optionnel)</span>
+               </label>
+               <Input
+                 placeholder="Douala, Yaoundé..."
+-                className="bg-[#EDF3F6] border-none h-12 rounded-xl px-4"
++                className="bg-[#EDF3F6] border-none h-12 rounded px-4"
+                 value={city}
+                 onChange={(e) => setCity(e.target.value)}
+               />
+             </div>
+ 
+             <div className="space-y-1.5">
+-              <label className="text-xs font-bold text-[#162A42] uppercase tracking-wider">
+-                Password
+-              </label>
++              <label className="text-xs font-bold text-[#162A42]">Password</label>
+               <div className="relative">
+                 <Input
+                   type={showPassword ? "text" : "password"}
+                   placeholder="Create a password"
+-                  className="bg-[#EDF3F6] border-none h-12 rounded-xl px-4 pr-12"
++                  className="bg-[#EDF3F6] border-none h-12 rounded px-4 pr-12"
+                   value={password}
+                   onChange={(e) => setPassword(e.target.value)}
+                   required
+@@ -163,14 +144,12 @@ export function SignUpPage() {
+             </div>
+ 
+             <div className="space-y-1.5">
+-              <label className="text-xs font-bold text-[#162A42] uppercase tracking-wider">
+-                Confirm Password
+-              </label>
++              <label className="text-xs font-bold text-[#162A42]">Confirm Password</label>
+               <div className="relative">
+                 <Input
+                   type={showConfirm ? "text" : "password"}
+                   placeholder="Confirm your password"
+-                  className="bg-[#EDF3F6] border-none h-12 rounded-xl px-4 pr-12"
++                  className="bg-[#EDF3F6] border-none h-12 rounded px-4 pr-12"
+                   value={confirmPassword}
+                   onChange={(e) => setConfirmPassword(e.target.value)}
+                   required
+@@ -194,7 +173,7 @@ export function SignUpPage() {
+             <Button
+               type="submit"
+               disabled={isLoading}
+-              className="w-full h-12 bg-[#0087CA] hover:bg-[#0087CA]/90 rounded-xl font-bold text-lg shadow-lg shadow-[#0087CA]/20 disabled:opacity-60"
++              className="w-full h-12 bg-[#0087CA] hover:bg-[#0087CA]/90 rounded font-bold text-lg shadow-lg shadow-[#0087CA]/20 disabled:opacity-60"
+             >
+               {isLoading ? <Loader2 size={20} className="animate-spin" /> : "Create account"}
+             </Button>
+@@ -203,7 +182,7 @@ export function SignUpPage() {
+           <div className="text-center pt-4">
+             <p className="text-slate-500 text-sm font-medium">
+               Already have an account?{" "}
+-              <Link to="/login" className="text-[#0087CA] font-black hover:underline">
++              <Link to="/login" className="text-[#0087CA] font-bold hover:underline">
+                 Log in
+               </Link>
+             </p>
+diff --git a/apps/frontend/src/pages/SpamPage.tsx b/apps/frontend/src/pages/SpamPage.tsx
+index 9f43939f..d7fe30d8 100644
+--- a/apps/frontend/src/pages/SpamPage.tsx
++++ b/apps/frontend/src/pages/SpamPage.tsx
+@@ -15,6 +15,7 @@ import {
+ import { useToast } from "@/components/ui/toast";
+ import { EmailListPanel } from "@/components/email/EmailListPanel";
+ import { useMailView } from "@/hooks/useMailView";
++import emptyIconImage from "@/assets/spam.png";
+ 
+ export function SpamPage() {
+   const { showToast } = useToast();
+@@ -94,7 +95,7 @@ export function SpamPage() {
+   };
+ 
+   return (
+-    <div className="flex h-full bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100 flex-col">
++    <div className="flex h-full bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100 flex-col">
+       <ConfirmDialog
+         open={showEmptyConfirm}
+         title="Vider le dossier Spam ?"
+@@ -140,14 +141,20 @@ export function SpamPage() {
+             refetch={refetch}
+             onThreadSelect={selectThread}
+             emptyStateTitle="Aucun spam détecté"
+-            emptyStateIcon={<InboxIcon className="mx-auto h-10 w-10 text-slate-400" />}
++            emptyStateIcon={
++              <img
++                src={emptyIconImage}
++                alt="Aucun spam détecté"
++                className="mx-auto h-24 w-auto object-contain"
++              />
++            }
+           />
+         </div>
+ 
+         <div className={mailReadColumnClass(isMobileOrTablet && view === "list")}>
+           {!selectedEmail ? (
+             <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-4 text-slate-200">
+-              <ShieldAlert size={64} className="text-[#0087CA]" />
++              <img src={emptyIconImage} alt="Spam" className="w-48 h-auto object-contain" />
+               <h2 className="text-2xl font-bold text-[#162A42]">Spam</h2>
+             </div>
+           ) : (
+diff --git a/apps/frontend/src/pages/TasksPage.tsx b/apps/frontend/src/pages/TasksPage.tsx
+index 60572c67..26471527 100644
+--- a/apps/frontend/src/pages/TasksPage.tsx
++++ b/apps/frontend/src/pages/TasksPage.tsx
+@@ -13,6 +13,8 @@ import { useTasks } from "@/hooks/useTasks";
+ import { Task, TaskPriority, TaskStatus } from "@/types/task";
+ import { Loader2 } from "lucide-react";
+ import threadsData from "@/mock/threads.json";
++import { Select } from "@/components/ui/select";
++import { Textarea } from "@/components/ui/textarea";
+ 
+ type ViewMode = "detail" | "form";
+ 
+@@ -210,7 +212,7 @@ export function TasksPage() {
+             <Button
+               size="sm"
+               onClick={handleNewTask}
+-              className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white h-8 rounded-lg gap-1 font-bold text-xs"
++              className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white h-8 rounded-md gap-1 font-bold text-xs"
+             >
+               <Plus size={14} />
+               Nouvelle tâche
+@@ -224,7 +226,7 @@ export function TasksPage() {
+                 key={f.value}
+                 onClick={() => setFilter(f.value)}
+                 className={cn(
+-                  "flex-1 text-xs font-bold py-1.5 px-1 rounded-lg transition-colors",
++                  "flex-1 text-xs font-bold py-1.5 px-1 rounded-md transition-colors",
+                   filter === f.value
+                     ? "bg-[#0087CA] text-white"
+                     : "text-[#162A42] hover:bg-[#DFE5E7]"
+@@ -261,7 +263,7 @@ export function TasksPage() {
+                   setViewMode("detail");
+                 }}
+                 className={cn(
+-                  "rounded-lg border p-3 cursor-pointer transition-all duration-150",
++                  "rounded-md border p-3 cursor-pointer transition-all duration-150",
+                   isSelected
+                     ? "border-[#0087CA] bg-[#EDF3F6]"
+                     : "border-[#DFE5E7] bg-white hover:border-slate-300",
+@@ -328,7 +330,7 @@ export function TasksPage() {
+               </p>
+               <Button
+                 onClick={handleNewTask}
+-                className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded-xl gap-2 font-bold h-11 px-6"
++                className="bg-[#0087CA] hover:bg-[#0087CA]/90 text-white rounded gap-2 font-bold h-11 px-6"
+               >
+                 <Plus size={18} />
+                 Nouvelle tâche
+@@ -376,7 +378,7 @@ export function TasksPage() {
+                     size="sm"
+                     onClick={() => handleEditTask(selectedTask)}
+                     variant="outline"
+-                    className="rounded-lg gap-1 h-8 font-bold text-xs"
++                    className="rounded-md gap-1 h-8 font-bold text-xs"
+                   >
+                     <Edit2 size={14} />
+                     Modifier
+@@ -500,7 +502,7 @@ export function TasksPage() {
+                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                   Description
+                 </label>
+-                <textarea
++                <Textarea
+                   placeholder="Description (optionnelle)"
+                   value={formData.description}
+                   onChange={(e) =>
+@@ -551,7 +553,7 @@ export function TasksPage() {
+                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                   Statut
+                 </label>
+-                <select
++                <Select
+                   value={formData.status}
+                   onChange={(e) =>
+                     setFormData((prev) => ({
+@@ -566,7 +568,7 @@ export function TasksPage() {
+                       {s.label}
+                     </option>
+                   ))}
+-                </select>
++                </Select>
+               </div>
+ 
+               {/* Date d'échéance */}
+@@ -587,7 +589,7 @@ export function TasksPage() {
+                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                   Email lié
+                 </label>
+-                <select
++                <Select
+                   value={formData.linkedEmailId}
+                   onChange={(e) =>
+                     setFormData((prev) => ({
+@@ -604,7 +606,7 @@ export function TasksPage() {
+                       {t.subject.length > 40 ? `${t.subject.slice(0, 40)}…` : t.subject}
+                     </option>
+                   ))}
+-                </select>
++                </Select>
+                 {formEmail && (
+                   <p className="text-xs text-slate-400 mt-1">
+                     {formEmail.from.name} — {formEmail.subject}
+@@ -620,21 +622,21 @@ export function TasksPage() {
+                   <Button
+                     variant="outline"
+                     onClick={handleDeleteTask}
+-                    className="rounded-xl h-11 font-bold text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600 gap-1"
++                    className="rounded h-11 font-bold text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600 gap-1"
+                   >
+                     <Trash2 size={16} />
+                     Supprimer
+                   </Button>
+                 )}
+                 <div className="flex-1" />
+-                <Button variant="outline" onClick={resetForm} className="rounded-xl h-11 font-bold">
++                <Button variant="outline" onClick={resetForm} className="rounded h-11 font-bold">
+                   Annuler
+                 </Button>
+                 <Button
+                   onClick={handleSaveTask}
+                   disabled={!formData.title.trim()}
+                   className={cn(
+-                    "rounded-xl h-11 font-bold",
++                    "rounded h-11 font-bold",
+                     "bg-[#0087CA] hover:bg-[#0087CA]/90 text-white",
+                     !formData.title.trim() && "opacity-50 cursor-not-allowed"
+                   )}
+diff --git a/apps/frontend/src/pages/admin/AdminDevelopersPage.tsx b/apps/frontend/src/pages/admin/AdminDevelopersPage.tsx
+index ebdf8a72..54a2ac33 100644
+--- a/apps/frontend/src/pages/admin/AdminDevelopersPage.tsx
++++ b/apps/frontend/src/pages/admin/AdminDevelopersPage.tsx
+@@ -72,7 +72,7 @@ export function AdminDevelopersPage() {
+ 
+       {/* Stats Cards */}
+       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+-        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
++        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm space-y-4">
+           <div className="flex items-center justify-between">
+             <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+               <Zap size={20} />
+@@ -82,12 +82,12 @@ export function AdminDevelopersPage() {
+             </Badge>
+           </div>
+           <div>
+-            <p className="text-3xl font-black text-[#162A42]">{stats?.totalRequests || 0}</p>
++            <p className="text-3xl font-bold text-[#162A42]">{stats?.totalRequests || 0}</p>
+             <p className="text-xs text-slate-400 font-medium mt-1">30 derniers jours</p>
+           </div>
+         </div>
+ 
+-        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
++        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm space-y-4">
+           <div className="flex items-center justify-between">
+             <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
+               <Activity size={20} />
+@@ -97,12 +97,12 @@ export function AdminDevelopersPage() {
+             </Badge>
+           </div>
+           <div>
+-            <p className="text-3xl font-black text-[#162A42]">{stats?.successRate || 0}%</p>
++            <p className="text-3xl font-bold text-[#162A42]">{stats?.successRate || 0}%</p>
+             <p className="text-xs text-slate-400 font-medium mt-1">Stabilité excellente</p>
+           </div>
+         </div>
+ 
+-        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
++        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm space-y-4">
+           <div className="flex items-center justify-between">
+             <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+               <Key size={20} />
+@@ -112,14 +112,14 @@ export function AdminDevelopersPage() {
+             </Badge>
+           </div>
+           <div>
+-            <p className="text-3xl font-black text-[#162A42]">{stats?.activeKeys || 0}</p>
++            <p className="text-3xl font-bold text-[#162A42]">{stats?.activeKeys || 0}</p>
+             <p className="text-xs text-slate-400 font-medium mt-1">Sur {apiKeys.length} créées</p>
+           </div>
+         </div>
+       </div>
+ 
+       {/* Main Content */}
+-      <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
++      <div className="flex-1 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+         {/* Creation Overlay */}
+         {isCreating && (
+           <div className="p-6 bg-slate-50 border-b border-slate-100 animate-in slide-in-from-top duration-300">
+@@ -146,7 +146,7 @@ export function AdminDevelopersPage() {
+                 <Button
+                   onClick={handleCreate}
+                   disabled={!newKeyName.trim()}
+-                  className="bg-[#162A42] hover:bg-[#162A42]/90 text-white rounded-xl h-12 px-6 font-bold"
++                  className="bg-[#162A42] hover:bg-[#162A42]/90 text-white rounded h-12 px-6 font-bold"
+                 >
+                   Générer Key
+                 </Button>
+diff --git a/apps/frontend/src/pages/admin/AdminSecurityPage.tsx b/apps/frontend/src/pages/admin/AdminSecurityPage.tsx
+index dd6cf275..66339ea4 100644
+--- a/apps/frontend/src/pages/admin/AdminSecurityPage.tsx
++++ b/apps/frontend/src/pages/admin/AdminSecurityPage.tsx
+@@ -64,7 +64,7 @@ export function AdminSecurityPage() {
+               Actif
+             </Badge>
+           </div>
+-          <p className="text-2xl font-black text-[#162A42]">{activeSessions}</p>
++          <p className="text-2xl font-bold text-[#162A42]">{activeSessions}</p>
+           <p className="text-xs text-slate-400 font-bold uppercase mt-1">Sessions Actives</p>
+         </div>
+ 
+@@ -75,7 +75,7 @@ export function AdminSecurityPage() {
+               Global
+             </Badge>
+           </div>
+-          <p className="text-2xl font-black text-[#162A42]">{totalConnections}</p>
++          <p className="text-2xl font-bold text-[#162A42]">{totalConnections}</p>
+           <p className="text-xs text-slate-400 font-bold uppercase mt-1">Connexions (24h)</p>
+         </div>
+ 
+@@ -86,7 +86,7 @@ export function AdminSecurityPage() {
+               Critique
+             </Badge>
+           </div>
+-          <p className="text-2xl font-black text-[#162A42]">{failedConnections}</p>
++          <p className="text-2xl font-bold text-[#162A42]">{failedConnections}</p>
+           <p className="text-xs text-slate-400 font-bold uppercase mt-1">Échecs d'accès</p>
+         </div>
+       </div>
+diff --git a/apps/frontend/tailwind.config.ts b/apps/frontend/tailwind.config.ts
+index e3b0de13..ecf5e733 100644
+--- a/apps/frontend/tailwind.config.ts
++++ b/apps/frontend/tailwind.config.ts
+@@ -1,10 +1,15 @@
+ import type { Config } from "tailwindcss";
++import defaultTheme from "tailwindcss/defaultTheme";
+ 
+ export default {
+   darkMode: ["class"],
+   content: ["./index.html", "./src/**/*.{ts,tsx}"],
+   theme: {
+-    extend: {},
++    extend: {
++      fontFamily: {
++        sans: ["Inter", ...defaultTheme.fontFamily.sans],
++      },
++    },
+   },
+   plugins: [],
+ } satisfies Config;
+diff --git a/apps/frontend/vite.config.ts b/apps/frontend/vite.config.ts
+index 93ac9c92..851d1c75 100644
+--- a/apps/frontend/vite.config.ts
++++ b/apps/frontend/vite.config.ts
+@@ -13,7 +13,7 @@ export default defineConfig({
+     port: 5173,
+     proxy: {
+       "/api": {
+-        target: "http://localhost:3000",
++        target: "http://localhost:3011",
+         changeOrigin: true,
+       },
+     },
+diff --git a/docker/docker-compose.yml b/docker/docker-compose.yml
+index c87cacdf..76c474ed 100644
+--- a/docker/docker-compose.yml
++++ b/docker/docker-compose.yml
+@@ -1,3 +1,4 @@
++name: "pyramidmail"
+ version: "3.8"
+ 
+ services:
+@@ -10,7 +11,7 @@ services:
+       POSTGRES_PASSWORD: pyramid123
+       POSTGRES_DB: pyramid_mail
+     ports:
+-      - "5432:5432"
++      - "5433:5432"
+     volumes:
+       - postgres_data:/var/lib/postgresql/data
+ 
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 0548a5d7..6b3bd548 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -178,7 +178,7 @@ importers:
+         specifier: ^2.1.0
+         version: 2.1.1
+       i18next:
+-        specifier: ^26.0.8
++        specifier: ^26.2.0
+         version: 26.2.0(typescript@5.9.3)
+       lucide-react:
+         specifier: ^0.380.0
+@@ -190,7 +190,7 @@ importers:
+         specifier: ^18.2.0
+         version: 18.3.1(react@18.3.1)
+       react-i18next:
+-        specifier: ^17.0.6
++        specifier: ^17.0.8
+         version: 17.0.8(i18next@26.2.0)(react-dom@18.3.1)(react@18.3.1)(typescript@5.9.3)
+       react-router-dom:
+         specifier: ^6.20.0

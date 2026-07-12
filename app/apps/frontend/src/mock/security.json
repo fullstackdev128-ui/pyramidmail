@@ -1,0 +1,188 @@
+{
+  "connectionHistory": [
+    {
+      "id": "ch1",
+      "user": "bassahakjm@pyramidmail.cm",
+      "ip": "197.255.42.10",
+      "location": "Douala, Cameroun",
+      "device": "Chrome 120 / Windows 11",
+      "date": "2025-01-14T08:32:00Z",
+      "status": "success"
+    },
+    {
+      "id": "ch2",
+      "user": "bassahakjm@pyramidmail.cm",
+      "ip": "41.202.224.5",
+      "location": "Yaoundé, Cameroun",
+      "device": "Safari 17 / iOS 17",
+      "date": "2025-01-14T07:45:00Z",
+      "status": "failed"
+    },
+    {
+      "id": "ch3",
+      "user": "bassahakjm@pyramidmail.cm",
+      "ip": "154.72.168.12",
+      "location": "Lagos, Nigeria",
+      "device": "Firefox 121 / Ubuntu 22.04",
+      "date": "2025-01-13T22:15:00Z",
+      "status": "suspicious"
+    },
+    {
+      "id": "ch4",
+      "user": "bassahakjm@pyramidmail.cm",
+      "ip": "197.255.42.10",
+      "location": "Douala, Cameroun",
+      "device": "Chrome 120 / Windows 11",
+      "date": "2025-01-13T18:30:00Z",
+      "status": "success"
+    },
+    {
+      "id": "ch5",
+      "user": "premium@pyramidmail.cm",
+      "ip": "102.68.125.8",
+      "location": "Abidjan, Côte d'Ivoire",
+      "device": "Edge 120 / Windows 10",
+      "date": "2025-01-13T15:20:00Z",
+      "status": "success"
+    },
+    {
+      "id": "ch6",
+      "user": "bassahakjm@pyramidmail.cm",
+      "ip": "197.255.42.10",
+      "location": "Douala, Cameroun",
+      "device": "Chrome 120 / Windows 11",
+      "date": "2025-01-13T12:10:00Z",
+      "status": "failed"
+    },
+    {
+      "id": "ch7",
+      "user": "bassahakjm@pyramidmail.cm",
+      "ip": "41.202.224.5",
+      "location": "Yaoundé, Cameroun",
+      "device": "Safari 17 / iOS 17",
+      "date": "2025-01-12T09:45:00Z",
+      "status": "success"
+    },
+    {
+      "id": "ch8",
+      "user": "bassahakjm@pyramidmail.cm",
+      "ip": "154.72.168.12",
+      "location": "Lagos, Nigeria",
+      "device": "Firefox 121 / Ubuntu 22.04",
+      "date": "2025-01-12T08:30:00Z",
+      "status": "suspicious"
+    },
+    {
+      "id": "ch9",
+      "user": "bassahakjm@pyramidmail.cm",
+      "ip": "197.255.42.10",
+      "location": "Douala, Cameroun",
+      "device": "Chrome 120 / Windows 11",
+      "date": "2025-01-11T20:15:00Z",
+      "status": "success"
+    },
+    {
+      "id": "ch10",
+      "user": "premium@pyramidmail.cm",
+      "ip": "102.68.125.8",
+      "location": "Abidjan, Côte d'Ivoire",
+      "device": "Edge 120 / Windows 10",
+      "date": "2025-01-11T16:00:00Z",
+      "status": "failed"
+    }
+  ],
+  "securityAlerts": [
+    {
+      "id": "sa1",
+      "type": "brute_force",
+      "severity": "high",
+      "message": "5 tentatives de connexion échouées détectées",
+      "user": "bassahakjm@pyramidmail.cm",
+      "date": "2025-01-14T07:50:00Z",
+      "resolved": false
+    },
+    {
+      "id": "sa2",
+      "type": "unusual_location",
+      "severity": "medium",
+      "message": "Connexion depuis un emplacement inhabituel : Lagos, Nigeria",
+      "user": "bassahakjm@pyramidmail.cm",
+      "date": "2025-01-13T22:15:00Z",
+      "resolved": false
+    },
+    {
+      "id": "sa3",
+      "type": "password_change",
+      "severity": "low",
+      "message": "Mot de passe changé avec succès",
+      "user": "bassahakjm@pyramidmail.cm",
+      "date": "2025-01-13T10:30:00Z",
+      "resolved": true
+    },
+    {
+      "id": "sa4",
+      "type": "account_locked",
+      "severity": "critical",
+      "message": "Compte verrouillé après 10 tentatives échouées",
+      "user": "premium@pyramidmail.cm",
+      "date": "2025-01-12T14:20:00Z",
+      "resolved": false
+    },
+    {
+      "id": "sa5",
+      "type": "brute_force",
+      "severity": "high",
+      "message": "3 tentatives de connexion échouées détectées",
+      "user": "bassahakjm@pyramidmail.cm",
+      "date": "2025-01-11T18:45:00Z",
+      "resolved": true
+    },
+    {
+      "id": "sa6",
+      "type": "unusual_location",
+      "severity": "medium",
+      "message": "Connexion depuis un emplacement inhabituel : Abidjan, Côte d'Ivoire",
+      "user": "premium@pyramidmail.cm",
+      "date": "2025-01-10T12:10:00Z",
+      "resolved": false
+    }
+  ],
+  "activeSessions": [
+    {
+      "id": "as1",
+      "user": "bassahakjm@pyramidmail.cm",
+      "device": "Chrome 120 / Windows 11",
+      "ip": "197.255.42.10",
+      "location": "Douala, Cameroun",
+      "startedAt": "2025-01-14T08:32:00Z",
+      "isCurrent": true
+    },
+    {
+      "id": "as2",
+      "user": "bassahakjm@pyramidmail.cm",
+      "device": "Safari 17 / iOS 17",
+      "ip": "41.202.224.5",
+      "location": "Yaoundé, Cameroun",
+      "startedAt": "2025-01-13T16:20:00Z",
+      "isCurrent": false
+    },
+    {
+      "id": "as3",
+      "user": "bassahakjm@pyramidmail.cm",
+      "device": "Firefox 121 / Ubuntu 22.04",
+      "ip": "154.72.168.12",
+      "location": "Lagos, Nigeria",
+      "startedAt": "2025-01-12T09:15:00Z",
+      "isCurrent": false
+    },
+    {
+      "id": "as4",
+      "user": "premium@pyramidmail.cm",
+      "device": "Edge 120 / Windows 10",
+      "ip": "102.68.125.8",
+      "location": "Abidjan, Côte d'Ivoire",
+      "startedAt": "2025-01-11T14:30:00Z",
+      "isCurrent": false
+    }
+  ]
+}

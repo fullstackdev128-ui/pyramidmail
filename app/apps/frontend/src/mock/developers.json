@@ -1,0 +1,200 @@
+{
+  "apiStats": {
+    "totalRequests": 24830,
+    "requestsToday": 342,
+    "activeKeys": 3,
+    "successRate": 98.7
+  },
+  "apiKeys": [
+    {
+      "id": "key1",
+      "name": "Application Mobile",
+      "key": "pm_live_4f8a2b1c9d3e7f6a0b5c8d2e1f4a7b3c",
+      "createdAt": "2025-01-01T10:00:00Z",
+      "lastUsedAt": "2025-01-14T08:30:00Z",
+      "status": "active",
+      "permissions": ["read", "send"],
+      "requestCount": 12400
+    },
+    {
+      "id": "key2",
+      "name": "Service de Synchronisation",
+      "key": "pm_live_7e9f1a3b5c8d2e4f6a0b7c9d1e3f5a2g",
+      "createdAt": "2025-01-05T14:20:00Z",
+      "lastUsedAt": "2025-01-13T16:45:00Z",
+      "status": "active",
+      "permissions": ["read", "send", "delete"],
+      "requestCount": 8900
+    },
+    {
+      "id": "key3",
+      "name": "Webhook Handler",
+      "key": "pm_live_2c4e6a8b0d1f3h5i7j9k1l3m5n7o9p1q",
+      "createdAt": "2025-01-10T09:15:00Z",
+      "lastUsedAt": "2025-01-12T11:30:00Z",
+      "status": "revoked",
+      "permissions": ["read", "webhooks"],
+      "requestCount": 3530
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "ep1",
+      "method": "GET",
+      "path": "/api/v1/messages",
+      "description": "Récupérer la liste des messages",
+      "category": "Messages",
+      "auth": true,
+      "params": [
+        {
+          "name": "folder",
+          "type": "string",
+          "required": false,
+          "description": "Dossier cible (inbox, sent, drafts...)"
+        },
+        {
+          "name": "limit",
+          "type": "number",
+          "required": false,
+          "description": "Nombre de résultats (défaut: 20)"
+        },
+        {
+          "name": "offset",
+          "type": "number",
+          "required": false,
+          "description": "Décalage pour pagination"
+        }
+      ],
+      "responseExample": "{ \"messages\": [{\"id\": \"msg1\", \"subject\": \"Hello\", \"from\": \"user@example.com\"}], \"total\": 150 }"
+    },
+    {
+      "id": "ep2",
+      "method": "POST",
+      "path": "/api/v1/messages",
+      "description": "Envoyer un nouveau message",
+      "category": "Messages",
+      "auth": true,
+      "params": [
+        {
+          "name": "to",
+          "type": "string",
+          "required": true,
+          "description": "Adresse email destinataire"
+        },
+        {
+          "name": "subject",
+          "type": "string",
+          "required": true,
+          "description": "Sujet du message"
+        },
+        { "name": "body", "type": "string", "required": true, "description": "Contenu du message" }
+      ],
+      "responseExample": "{ \"id\": \"msg123\", \"status\": \"sent\" }"
+    },
+    {
+      "id": "ep3",
+      "method": "GET",
+      "path": "/api/v1/auth/token",
+      "description": "Obtenir un token d'authentification",
+      "category": "Auth",
+      "auth": false,
+      "params": [
+        {
+          "name": "grant_type",
+          "type": "string",
+          "required": true,
+          "description": "Type de grant (client_credentials)"
+        },
+        { "name": "client_id", "type": "string", "required": true, "description": "ID client API" },
+        {
+          "name": "client_secret",
+          "type": "string",
+          "required": true,
+          "description": "Secret client API"
+        }
+      ],
+      "responseExample": "{ \"access_token\": \"eyJ0eXAi...\", \"token_type\": \"Bearer\", \"expires_in\": 3600 }"
+    },
+    {
+      "id": "ep4",
+      "method": "GET",
+      "path": "/api/v1/contacts",
+      "description": "Lister les contacts",
+      "category": "Contacts",
+      "auth": true,
+      "params": [
+        {
+          "name": "search",
+          "type": "string",
+          "required": false,
+          "description": "Recherche par nom ou email"
+        },
+        {
+          "name": "limit",
+          "type": "number",
+          "required": false,
+          "description": "Nombre de résultats (défaut: 50)"
+        }
+      ],
+      "responseExample": "{ \"contacts\": [{\"id\": \"c1\", \"name\": \"John Doe\", \"email\": \"john@example.com\"}], \"total\": 25 }"
+    },
+    {
+      "id": "ep5",
+      "method": "POST",
+      "path": "/api/v1/contacts",
+      "description": "Ajouter un contact",
+      "category": "Contacts",
+      "auth": true,
+      "params": [
+        { "name": "name", "type": "string", "required": true, "description": "Nom du contact" },
+        { "name": "email", "type": "string", "required": true, "description": "Adresse email" }
+      ],
+      "responseExample": "{ \"id\": \"c26\", \"name\": \"Jane Smith\", \"email\": \"jane@example.com\" }"
+    },
+    {
+      "id": "ep6",
+      "method": "POST",
+      "path": "/api/v1/webhooks",
+      "description": "Enregistrer un webhook",
+      "category": "Webhooks",
+      "auth": true,
+      "params": [
+        { "name": "url", "type": "string", "required": true, "description": "URL du webhook" },
+        {
+          "name": "events",
+          "type": "array",
+          "required": true,
+          "description": "Événements à écouter (message.received, message.sent)"
+        }
+      ],
+      "responseExample": "{ \"id\": \"wh1\", \"url\": \"https://example.com/webhook\", \"events\": [\"message.received\"] }"
+    },
+    {
+      "id": "ep7",
+      "method": "GET",
+      "path": "/api/v1/webhooks",
+      "description": "Lister les webhooks",
+      "category": "Webhooks",
+      "auth": true,
+      "params": [],
+      "responseExample": "{ \"webhooks\": [{\"id\": \"wh1\", \"url\": \"https://example.com/webhook\", \"events\": [\"message.received\"]}] }"
+    },
+    {
+      "id": "ep8",
+      "method": "DELETE",
+      "path": "/api/v1/messages/{id}",
+      "description": "Supprimer un message",
+      "category": "Messages",
+      "auth": true,
+      "params": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "ID du message à supprimer"
+        }
+      ],
+      "responseExample": "{ \"success\": true }"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "dom_1",
+    "domainName": "client.com",
+    "isVerified": false,
+    "expectedTxtRecord": "pyramid-mail-verification=abcdef123456",
+    "verificationError": null,
+    "lastCheckedAt": null,
+    "spfRecord": "v=spf1 include:_spf.pymail.cm ~all",
+    "dmarcRecord": "v=DMARC1; p=none; rua=mailto:dmarc@client.com"
+  },
+  {
+    "id": "dom_2",
+    "domainName": "startup.io",
+    "isVerified": true,
+    "expectedTxtRecord": null,
+    "verificationError": null,
+    "lastCheckedAt": "2026-04-02T08:05:00.000Z",
+    "spfRecord": "v=spf1 include:_spf.pymail.cm ~all",
+    "dmarcRecord": "v=DMARC1; p=none; rua=mailto:dmarc@startup.io"
+  }
+]

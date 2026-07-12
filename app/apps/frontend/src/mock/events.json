@@ -1,0 +1,82 @@
+[
+  {
+    "id": "evt_1",
+    "title": "Réunion d'équipe",
+    "date": "2026-04-13",
+    "startTime": "09:00",
+    "endTime": "10:00",
+    "color": "blue",
+    "description": "Point hebdomadaire de l'équipe développement.",
+    "location": "Salle A"
+  },
+  {
+    "id": "evt_2",
+    "title": "Appel client — CAMTEL",
+    "date": "2026-04-15",
+    "startTime": "14:00",
+    "endTime": "15:00",
+    "color": "green",
+    "description": "Discussion sur les besoins en messagerie sécurisée.",
+    "location": "Visioconférence"
+  },
+  {
+    "id": "evt_3",
+    "title": "Deadline projet P4",
+    "date": "2026-04-20",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "color": "red",
+    "description": "Date limite de livraison du module Abonnements.",
+    "location": ""
+  },
+  {
+    "id": "evt_4",
+    "title": "Formation React avancé",
+    "date": "2026-04-22",
+    "startTime": "10:00",
+    "endTime": "12:00",
+    "color": "amber",
+    "description": "Formation interne sur les hooks avancés et le state management.",
+    "location": "Salle de formation"
+  },
+  {
+    "id": "evt_5",
+    "title": "Déjeuner d'affaires",
+    "date": "2026-04-17",
+    "startTime": "12:30",
+    "endTime": "14:00",
+    "color": "purple",
+    "description": "Rencontre avec le partenaire ANTIC Cameroun.",
+    "location": "Restaurant Le Safoutier"
+  },
+  {
+    "id": "evt_6",
+    "title": "Revue de sprint",
+    "date": "2026-04-24",
+    "startTime": "16:00",
+    "endTime": "17:00",
+    "color": "blue",
+    "description": "Présentation des avancées du sprint 12.",
+    "location": "Salle A"
+  },
+  {
+    "id": "evt_7",
+    "title": "Présentation produit",
+    "date": "2026-05-05",
+    "startTime": "11:00",
+    "endTime": "12:30",
+    "color": "red",
+    "description": "Démo du nouveau module calendrier aux parties prenantes.",
+    "location": "Amphithéâtre"
+  },
+  {
+    "id": "evt_8",
+    "title": "Atelier design UI",
+    "date": "2026-05-08",
+    "startTime": "09:30",
+    "endTime": "11:30",
+    "color": "green",
+    "description": "Atelier collaboratif sur la refonte du dashboard.",
+    "location": "Salle créative"
+  }
+]

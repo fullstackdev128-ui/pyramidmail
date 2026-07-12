@@ -1,0 +1,62 @@
+[
+  {
+    "id": "task_1",
+    "title": "Finaliser la maquette du dashboard",
+    "description": "Compléter les écrans manquants pour le tableau de bord admin avant la fin de la semaine.",
+    "priority": "high",
+    "status": "todo",
+    "dueDate": "2026-04-20",
+    "linkedEmailId": "th_1",
+    "createdAt": "2026-04-10T09:00:00.000Z"
+  },
+  {
+    "id": "task_2",
+    "title": "Archiver les anciens emails",
+    "description": "",
+    "priority": "low",
+    "status": "todo",
+    "dueDate": null,
+    "linkedEmailId": null,
+    "createdAt": "2026-04-11T14:30:00.000Z"
+  },
+  {
+    "id": "task_3",
+    "title": "Migrer le serveur de messagerie",
+    "description": "Planifier la migration vers le nouveau serveur IMAP avec l'équipe infrastructure.",
+    "priority": "high",
+    "status": "in_progress",
+    "dueDate": "2026-04-18",
+    "linkedEmailId": "th_2",
+    "createdAt": "2026-04-08T08:00:00.000Z"
+  },
+  {
+    "id": "task_4",
+    "title": "Mettre à jour la documentation API",
+    "description": "Ajouter les nouveaux endpoints et exemples de requêtes.",
+    "priority": "medium",
+    "status": "in_progress",
+    "dueDate": "2026-04-22",
+    "linkedEmailId": null,
+    "createdAt": "2026-04-09T10:00:00.000Z"
+  },
+  {
+    "id": "task_5",
+    "title": "Réviser les paramètres de sécurité",
+    "description": "Vérifier les règles de mot de passe et activer la 2FA.",
+    "priority": "medium",
+    "status": "done",
+    "dueDate": "2026-04-12",
+    "linkedEmailId": null,
+    "createdAt": "2026-04-05T16:00:00.000Z"
+  },
+  {
+    "id": "task_6",
+    "title": "Nettoyer les contacts en double",
+    "description": "Fusionner les doublons dans le carnet d'adresses.",
+    "priority": "low",
+    "status": "done",
+    "dueDate": "2026-04-09",
+    "linkedEmailId": "th_5",
+    "createdAt": "2026-04-03T11:00:00.000Z"
+  }
+]

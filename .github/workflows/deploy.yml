@@ -1,0 +1,22 @@
+name: Deploy PyramidMail Production
+
+on:
+  push:
+    branches:
+      - production
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Deploy PyramidMail
+        run: |
+          cd ~/pyramidmail/app
+          git pull origin production
+          pnpm install --frozen-lockfile
+          export VITE_API_URL="https://mail.pymail.cm/api"
+          pnpm build
+          cd apps/backend
+          npx prisma migrate deploy
+          pm2 restart pyramid-api
+          echo "✅ Déploiement terminé"

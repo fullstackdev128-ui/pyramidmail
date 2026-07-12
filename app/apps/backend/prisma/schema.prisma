@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MailFolder {
+  INBOX
+  SENT
+  DRAFT
+  TRASH
+  SPAM
+  ARCHIVE
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  displayName   String?
+  phone         String?
+  city          String?
+  bio           String?
+  avatar        String?
+  isVerified    Boolean        @default(false)
+  customDomains CustomDomain[]
+  ssoClients    OAuthClient[]
+  emails        Email[]
+  sessions      Session[]
+  apiKeys       ApiKey[]
+  threads       Thread[]
+  settings      UserSettings?
+  calendarEvents CalendarEvent[]
+  tasks         Task[]
+  role          String         @default("user")
+  plan          String         @default("free")
+  lastLoginAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model CustomDomain {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id])
+  domainName        String    @unique
+  verificationToken String?
+  expectedTxtRecord String?
+  isVerified        Boolean   @default(false)
+  dkimPublicKey     String?
+  spfRecord         String?
+  dmarcRecord       String?
+  lastCheckedAt     DateTime?
+  verificationError String?
+  createdAt         DateTime  @default(now())
+}
+
+model Thread {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  subject       String
+  snippet       String?
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  emails        Email[]
+
+  @@index([userId, lastMessageAt])
+}
+
+model Email {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id])
+  threadId    String?
+  thread      Thread?    @relation(fields: [threadId], references: [id])
+  from        String
+  to          String[]
+  cc          String[]
+  bcc         String[]
+  subject     String
+  bodyHtml    String?
+  bodyText    String?
+  attachments Json?
+  size        Int        @default(0)
+  folder      MailFolder @default(INBOX)
+  isRead      Boolean    @default(false)
+  isStarred   Boolean    @default(false)
+  isImportant Boolean    @default(false)
+  isArchived  Boolean    @default(false)
+  isDeleted   Boolean    @default(false)
+  sentAt      DateTime   @default(now())
+  receivedAt  DateTime?
+  messageId   String?
+  inReplyTo   String?
+  references  String[]   @default([])
+  createdAt   DateTime   @default(now())
+
+  @@index([userId, folder, sentAt])
+  @@index([threadId])
+}
+
+model OAuthClient {
+  id           String   @id @default(cuid())
+  name         String
+  clientId     String   @unique
+  clientSecret String
+  redirectUris String[]
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+model OAuthToken {
+  id           String   @id @default(cuid())
+  accessToken  String   @unique
+  refreshToken String?  @unique
+  clientId     String
+  userId       String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id])
+  refreshTokenHash String
+  userAgent        String?
+  device           String?
+  ip               String?
+  ipAddress        String?
+  lastSeenAt       DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  name        String
+  key         String    @unique
+  permissions String[]
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+}
+
+model UserSettings {
+  id                 String  @id @default(cuid())
+  userId             String  @unique
+  user               User    @relation(fields: [userId], references: [id])
+  language           String  @default("fr")
+  timezone           String  @default("Africa/Douala")
+  density            String  @default("normal")
+  defaultReply       String  @default("reply")
+  theme              String  @default("light")
+  accentColor        String  @default("#0087CA")
+  signatureEnabled   Boolean @default(false)
+  signatureContent   String  @default("")
+  notifDesktop       Boolean @default(true)
+  notifSound         Boolean @default(true)
+  notifImportantOnly Boolean @default(false)
+  vacationEnabled    Boolean @default(false)
+  vacationSubject    String  @default("")
+  vacationMessage    String  @default("")
+  vacationStart      String?
+  vacationEnd        String?
+  filters            Json    @default("[]")
+  blockedAddresses   Json    @default("[]")
+  twoFactorEnabled   Boolean @default(false)
+}
+
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  allDay      Boolean  @default(false)
+  color       String   @default("#0087CA")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  title       String
+  description String?
+  status      String    @default("todo")
+  priority    String    @default("medium")
+  dueDate     DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}

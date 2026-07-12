@@ -1,0 +1,42 @@
+version: "3.8"
+services:
+  postgres:
+    image: postgres:15
+    container_name: pyramid_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: pyramid
+      POSTGRES_PASSWORD: PyramidDB2026!
+      POSTGRES_DB: pyramid_mail
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: pyramid_redis
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+
+  minio:
+    image: minio/minio:RELEASE.2023-09-04T19-57-37Z
+    container_name: pyramid_minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: pyraminio
+      MINIO_ROOT_PASSWORD: MinIO2026Secure!
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
